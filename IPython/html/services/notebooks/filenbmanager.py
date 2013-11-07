@@ -30,6 +30,19 @@ from IPython.nbformat import current
 from IPython.utils.traitlets import Unicode, Dict, Bool, TraitError
 from IPython.utils import tz
 
+def clean_nb(nb):
+    """Return a clean copy of the notebook nb with all output removed."""
+    clean_nb = nb.copy()
+
+    # Strip out all of the output and prompt_number sections
+    for worksheet in clean_nb["worksheets"]:
+        for cell in worksheet["cells"]:
+            if "outputs" in cell:
+                del cell.outputs[:]
+            if "prompt_number" in cell:
+                del cell["prompt_number"]
+    return clean_nb
+
 #-----------------------------------------------------------------------------
 # Classes
 #-----------------------------------------------------------------------------
@@ -46,6 +59,13 @@ class FileNotebookManager(NotebookManager):
         """
     )
     
+    save_clean = Bool(False, config=True,
+        help="""Save a clean (output removed) version when saving the notebook.
+        
+        This can also be set with the short `--clean` flag.
+        """
+    )
+
     checkpoint_dir = Unicode(config=True,
         help="""The location in which to keep notebook checkpoints
         
@@ -255,6 +275,16 @@ class FileNotebookManager(NotebookManager):
             except Exception as e:
                 raise web.HTTPError(400, u'Unexpected error while saving notebook as script: %s %s' % (py_path, e))
 
+        # Save .ipynb.clean as well.
+        if self.save_clean:
+            py_path = os_path + '.clean'
+            self.log.debug("Writing clean file %s", py_path)
+            try:
+                with io.open(py_path, 'w', encoding='utf-8') as f:
+                    current.write(clean_nb(nb), f, u'ipynb')
+            except Exception as e:
+                raise web.HTTPError(400, u'Unexpected error while saving clean notebook: %s %s' % (py_path, e))
+
         model = self.get_notebook_model(new_name, new_path, content=False)
         return model
 
@@ -305,6 +335,12 @@ class FileNotebookManager(NotebookManager):
             if os.path.isfile(new_py_path):
                 raise web.HTTPError(409, u'Python script with name already exists: %s' % new_py_path)
 
+        if self.save_clean:
+            old_clean_path = old_os_path + '.clean'
+            new_clean_path = new_os_path + '.clean'
+            if os.path.isfile(new_py_path):
+                raise web.HTTPError(409, u'Clean notebook with name already exists: %s' % new_py_path)
+
         # Move the notebook file
         try:
             os.rename(old_os_path, new_os_path)
@@ -324,6 +360,10 @@ class FileNotebookManager(NotebookManager):
         # Move the .py script
         if self.save_script:
             os.rename(old_py_path, new_py_path)
+
+        # Move the .clean file
+        if self.save_clean:
+            os.rename(old_clean_path, new_clean_path)
   
     # Checkpoint-related utilities
     

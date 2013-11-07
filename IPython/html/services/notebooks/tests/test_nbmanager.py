@@ -215,6 +215,25 @@ class TestNotebookManager(TestCase):
             py_path = os.path.join(td, os.path.splitext(name)[0]+'.py')
             assert os.path.exists(py_path), py_path
 
+    def test_save_notebook_with_clean(self):
+        with TemporaryDirectory() as td:
+            # Create a notebook
+            nm = FileNotebookManager(notebook_dir=td)
+            nm.save_clean = True
+            model = nm.create_notebook_model()
+            name = model['name']
+            path = model['path']
+
+            # Get the model with 'content'
+            full_model = nm.get_notebook_model(name, path)
+
+            # Save the notebook
+            model = nm.save_notebook_model(full_model, name, path)
+
+            # Check that the script was created
+            py_path = os.path.join(td, name+'.clean')
+            assert os.path.exists(py_path), py_path
+
     def test_delete_notebook_model(self):
         with TemporaryDirectory() as td:
             # Test in the root directory

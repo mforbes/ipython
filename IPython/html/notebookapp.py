@@ -236,10 +236,15 @@ flags.update(boolean_flag('script', 'FileNotebookManager.save_script',
                'Auto-save a .py script everytime the .ipynb notebook is saved',
                'Do not auto-save .py scripts for every notebook'))
 
+flags.update(boolean_flag('clean', 'FileNotebookManager.save_clean',
+              'Save a ".clean" (no output) version when the notebook is saved.',
+              'Do auto-save a ".clean" (no output) version'))
+
 # the flags that are specific to the frontend
 # these must be scrubbed before being passed to the kernel,
 # or it will raise an error on unrecognized flags
-notebook_flags = ['no-browser', 'no-mathjax', 'script', 'no-script']
+notebook_flags = ['no-browser', 'no-mathjax', 'script', 'no-script', 
+                  'clean', 'no-clean']
 
 aliases = dict(kernel_aliases)
 

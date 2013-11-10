@@ -338,8 +338,8 @@ class FileNotebookManager(NotebookManager):
         if self.save_clean:
             old_clean_path = old_os_path + '.clean'
             new_clean_path = new_os_path + '.clean'
-            if os.path.isfile(new_py_path):
-                raise web.HTTPError(409, u'Clean notebook with name already exists: %s' % new_py_path)
+            if os.path.isfile(new_clean_path):
+                raise web.HTTPError(409, u'Clean notebook with name already exists: %s' % new_clean_path)
 
         # Move the notebook file
         try:
@@ -362,7 +362,7 @@ class FileNotebookManager(NotebookManager):
             os.rename(old_py_path, new_py_path)
 
         # Move the .clean file
-        if self.save_clean:
+        if self.save_clean and os.path.exists(old_clean_path):
             os.rename(old_clean_path, new_clean_path)
   
     # Checkpoint-related utilities

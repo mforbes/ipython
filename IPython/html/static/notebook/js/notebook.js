@@ -1588,7 +1588,7 @@ var IPython = (function (IPython) {
                     cell_data.cell_type = 'raw';
                 }
 
-                new_cell = this.insert_cell_below(cell_data.cell_type);
+                new_cell = this.insert_cell_at_bottom(cell_data.cell_type);
                 new_cell.fromJSON(cell_data);
             };
         };
@@ -1958,7 +1958,14 @@ var IPython = (function (IPython) {
             this.start_session();
         }
         // load our checkpoint list
-        IPython.notebook.list_checkpoints();
+        this.list_checkpoints();
+        
+        // load toolbar state
+        if (this.metadata.celltoolbar) {
+            IPython.CellToolbar.global_show();
+            IPython.CellToolbar.activate_preset(this.metadata.celltoolbar);
+        }
+        
         $([IPython.events]).trigger('notebook_loaded.Notebook');
     };
 

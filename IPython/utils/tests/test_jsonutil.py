@@ -26,6 +26,9 @@ from ..py3compat import unicode_to_str, str_to_bytes, iteritems
 #-----------------------------------------------------------------------------
 # Test functions
 #-----------------------------------------------------------------------------
+class Int(int):
+    def __str__(self):
+        return 'Int(%i)' % self
 
 def test():
     # list of input/expected output.  Use None for the expected output if it
@@ -48,6 +51,7 @@ def test():
              # More exotic objects
              ((x for x in range(3)), [0, 1, 2]),
              (iter([1, 2]), [1, 2]),
+             (Int(5), 5),
              ]
     
     for val, jval in pairs:
@@ -112,6 +116,18 @@ def test_extract_dates():
     for dt in extracted:
         nt.assert_true(isinstance(dt, datetime.datetime))
         nt.assert_equal(dt, ref)
+
+def test_parse_ms_precision():
+    base = '2013-07-03T16:34:52.'
+    digits = '1234567890'
+    
+    for i in range(len(digits)):
+        ts = base + digits[:i]
+        parsed = jsonutil.parse_date(ts)
+        if i >= 1 and i <= 6:
+            assert isinstance(parsed, datetime.datetime)
+        else:
+            assert isinstance(parsed, str)
 
 def test_date_default():
     data = dict(today=datetime.datetime.now(), utcnow=tz.utcnow())

@@ -130,15 +130,18 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
         help="""
         The type of paging to use. Valid values are:
 
-            'inside' : The widget pages like a traditional terminal.
-            'hsplit' : When paging is requested, the widget is split
-                       horizontally. The top pane contains the console, and the
-                       bottom pane contains the paged text.
-            'vsplit' : Similar to 'hsplit', except that a vertical splitter
-                       used.
-            'custom' : No action is taken by the widget beyond emitting a
-                       'custom_page_requested(str)' signal.
-            'none'   : The text is written directly to the console.
+        'inside'
+           The widget pages like a traditional terminal.
+        'hsplit'
+           When paging is requested, the widget is split horizontally. The top
+           pane contains the console, and the bottom pane contains the paged text.
+        'vsplit'
+           Similar to 'hsplit', except that a vertical splitter is used.
+        'custom'
+           No action is taken by the widget beyond emitting a
+           'custom_page_requested(str)' signal.
+        'none'
+           The text is written directly to the console.
         """)
 
     font_family = Unicode(config=True,
@@ -233,8 +236,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
     def __init__(self, parent=None, **kw):
         """ Create a ConsoleWidget.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         parent : QWidget, optional [default None]
             The parent for this widget.
         """
@@ -540,8 +543,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
     def clear(self, keep_input=True):
         """ Clear the console.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         keep_input : bool, optional (default True)
             If set, restores the old input buffer if a new prompt is written.
         """
@@ -577,8 +580,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
         """ Executes source or the input buffer, possibly prompting for more
         input.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         source : str, optional
 
             The source to execute. If not specified, the input buffer will be
@@ -597,14 +600,14 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
             entered by the user. The effect of this parameter depends on the
             subclass implementation.
 
-        Raises:
-        -------
+        Raises
+        ------
         RuntimeError
             If incomplete input is given and 'hidden' is True. In this case,
             it is not possible to prompt for more input.
 
-        Returns:
-        --------
+        Returns
+        -------
         A boolean indicating whether the source was executed.
         """
         # WARNING: The order in which things happen here is very particular, in
@@ -743,8 +746,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
     def paste(self, mode=QtGui.QClipboard.Clipboard):
         """ Paste the contents of the clipboard into the input region.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         mode : QClipboard::Mode, optional [default QClipboard::Clipboard]
 
             Controls which part of the system clipboard is used. This can be
@@ -1057,8 +1060,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
         """ Given a KeyboardModifiers flags object, return whether the Control
         key is down.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         include_command : bool, optional (default True)
             Whether to treat the Command key as a (mutually exclusive) synonym
             for Control when in Mac OS.
@@ -1865,8 +1868,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
         """ Displays text using the pager if it exceeds the height of the
         viewport.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         html : bool, optional (default False)
             If set, the text will be interpreted as HTML instead of plain text.
         """
@@ -1900,11 +1903,8 @@ class ConsoleWidget(MetaQObjectHasTraits('NewBase', (LoggingConfigurable, QtGui.
         """
         Change the pager to `paging` style.
 
-        XXX: currently, this is limited to switching between 'hsplit' and
-        'vsplit'.
-
-        Parameters:
-        -----------
+        Parameters
+        ----------
         paging : string
             Either "hsplit", "vsplit", or "inside"
         """

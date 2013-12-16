@@ -10,15 +10,17 @@ IO related utilities.
 #  the file COPYING, distributed as part of this software.
 #-----------------------------------------------------------------------------
 from __future__ import print_function
+from __future__ import absolute_import
 
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
+import codecs
 import os
 import sys
 import tempfile
 from .capture import CapturedIO, capture_output
-from .py3compat import string_types, input
+from .py3compat import string_types, input, PY3
 
 #-----------------------------------------------------------------------------
 # Code
@@ -155,11 +157,13 @@ class Tee(object):
             self.close()
 
 
-def ask_yes_no(prompt,default=None):
+def ask_yes_no(prompt, default=None, interrupt=None):
     """Asks a question and returns a boolean (y/n) answer.
 
     If default is given (one of 'y','n'), it is used if the user input is
-    empty. Otherwise the question is repeated until an answer is given.
+    empty. If interrupt is given (one of 'y','n'), it is used if the user
+    presses Ctrl-C. Otherwise the question is repeated until an answer is
+    given.
 
     An EOF is treated as the default answer.  If there is no default, an
     exception is raised to prevent infinite loops.
@@ -174,7 +178,8 @@ def ask_yes_no(prompt,default=None):
             if not ans:  # response was an empty string
                 ans = default
         except KeyboardInterrupt:
-            pass
+            if interrupt:
+                ans = interrupt
         except EOFError:
             if default in answers.keys():
                 ans = default
@@ -227,3 +232,26 @@ def raw_print_err(*args, **kw):
 # Short aliases for quick debugging, do NOT use these in production code.
 rprint = raw_print
 rprinte = raw_print_err
+
+def unicode_std_stream(stream='stdout'):
+    u"""Get a wrapper to write unicode to stdout/stderr as UTF-8.
+
+    This ignores environment variables and default encodings, to reliably write
+    unicode to stdout or stderr.
+
+    ::
+
+        unicode_std_stream().write(u'ł@e¶ŧ←')
+    """
+    assert stream in ('stdout', 'stderr')
+    stream  = getattr(sys, stream)
+    if PY3:
+        try:
+            stream_b = stream.buffer
+        except AttributeError:
+            # sys.stdout has been replaced - use it directly
+            return stream
+    else:
+        stream_b = stream
+
+    return codecs.getwriter('utf-8')(stream_b)

@@ -62,10 +62,15 @@ var IPython = (function (IPython) {
      */
     var CodeCell = function (kernel, options) {
         this.kernel = kernel || null;
-        this.code_mirror = null;
-        this.input_prompt_number = null;
         this.collapsed = false;
-        this.cell_type = "code";
+
+        // create all attributed in constructor function
+        // even if null for V8 VM optimisation
+        this.input_prompt_number = null;
+        this.celltoolbar = null;
+        this.output_area = null;
+        this.last_msg_id = null;
+        this.completer = null;
 
 
         var cm_overwrite_options  = {
@@ -75,6 +80,9 @@ var IPython = (function (IPython) {
         options = this.mergeopt(CodeCell, options, {cm_config:cm_overwrite_options});
 
         IPython.Cell.apply(this,[options]);
+
+        // Attributes we want to override in this subclass.
+        this.cell_type = "code";
 
         var that = this;
         this.element.focusout(
@@ -114,28 +122,21 @@ var IPython = (function (IPython) {
         var cell =  $('<div></div>').addClass('cell border-box-sizing code_cell');
         cell.attr('tabindex','2');
 
-        this.celltoolbar = new IPython.CellToolbar(this);
-
         var input = $('<div></div>').addClass('input');
-        var vbox = $('<div/>').addClass('vbox box-flex1');
-        input.append($('<div/>').addClass('prompt input_prompt'));
-        vbox.append(this.celltoolbar.element);
+        var prompt = $('<div/>').addClass('prompt input_prompt');
+        var inner_cell = $('<div/>').addClass('inner_cell');
+        this.celltoolbar = new IPython.CellToolbar(this);
+        inner_cell.append(this.celltoolbar.element);
         var input_area = $('<div/>').addClass('input_area');
         this.code_mirror = CodeMirror(input_area.get(0), this.cm_config);
         $(this.code_mirror.getInputField()).attr("spellcheck", "false");
-        vbox.append(input_area);
-        input.append(vbox);
+        inner_cell.append(input_area);
+        input.append(prompt).append(inner_cell);
         var output = $('<div></div>');
         cell.append(input).append(output);
         this.element = cell;
         this.output_area = new IPython.OutputArea(output, true);
-
-        // construct a completer only if class exist
-        // otherwise no print view
-        if (IPython.Completer !== undefined)
-        {
-            this.completer = new IPython.Completer(this);
-        }
+        this.completer = new IPython.Completer(this);
     };
 
     /**
@@ -202,8 +203,10 @@ var IPython = (function (IPython) {
                 return true;
         } else if (event.keyCode === key.TAB && event.type == 'keydown') {
             // Tab completion.
-            //Do not trim here because of tooltip
-            if (editor.somethingSelected()) { return false; }
+            IPython.tooltip.remove_and_cancel_tooltip();
+            if (editor.somethingSelected()) {
+                return false;
+            }
             var pre_cursor = editor.getRange({line:cur.line,ch:0},cur);
             if (pre_cursor.trim() === "") {
                 // Don't autocomplete if the part of the line before the cursor
@@ -442,8 +445,8 @@ var IPython = (function (IPython) {
     CodeCell.prototype.toJSON = function () {
         var data = IPython.Cell.prototype.toJSON.apply(this);
         data.input = this.get_text();
-        data.cell_type = 'code';
-        if (this.input_prompt_number) {
+        // is finite protect against undefined and '*' value
+        if (isFinite(this.input_prompt_number)) {
             data.prompt_number = this.input_prompt_number;
         }
         var outputs = this.output_area.toJSON();

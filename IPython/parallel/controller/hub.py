@@ -30,6 +30,7 @@ from zmq.eventloop.zmqstream import ZMQStream
 
 # internal:
 from IPython.utils.importstring import import_item
+from IPython.utils.jsonutil import extract_dates
 from IPython.utils.localinterfaces import localhost
 from IPython.utils.py3compat import cast_bytes, unicode_type, iteritems
 from IPython.utils.traitlets import (
@@ -1148,11 +1149,15 @@ class Hub(SessionFactory):
 
     def queue_status(self, client_id, msg):
         """Return the Queue status of one or more targets.
-        if verbose: return the msg_ids
-        else: return len of each type.
-        keys: queue (pending MUX jobs)
-            tasks (pending Task jobs)
-            completed (finished jobs from both queues)"""
+
+        If verbose, return the msg_ids, else return len of each type.
+
+        Keys:
+
+        * queue (pending MUX jobs)
+        * tasks (pending Task jobs)
+        * completed (finished jobs from both queues)
+        """
         content = msg['content']
         targets = content['targets']
         try:
@@ -1385,7 +1390,7 @@ class Hub(SessionFactory):
     def db_query(self, client_id, msg):
         """Perform a raw query on the task record database."""
         content = msg['content']
-        query = content.get('query', {})
+        query = extract_dates(content.get('query', {}))
         keys = content.get('keys', None)
         buffers = []
         empty = list()

@@ -57,7 +57,7 @@ var IPython = (function (IPython) {
         this.prompt_overlay.hide();
         
         this.wrapper.addClass('output_wrapper');
-        this.element.addClass('output vbox');
+        this.element.addClass('output');
         
         this.collapse_button.addClass("btn output_collapsed");
         this.collapse_button.attr('title', 'click to expand output');
@@ -326,19 +326,61 @@ var IPython = (function (IPython) {
         }
         return oa;
     };
-    
-    OutputArea.prototype._append_javascript_error = function (err, container) {
+
+
+    OutputArea.prototype.create_output_subarea = function(md, classes) {
+        var subarea = $('<div/>').addClass('output_subarea').addClass(classes);
+        if (md['isolated']) {
+            // Create an iframe to isolate the subarea from the rest of the
+            // document
+            var iframe = $('<iframe/>').addClass('box-flex1');
+            iframe.css({'height':1, 'width':'100%', 'display':'block'});
+            iframe.attr('frameborder', 0);
+            iframe.attr('scrolling', 'auto');
+
+            // Once the iframe is loaded, the subarea is dynamically inserted
+            iframe.on('load', function() {
+                // Workaround needed by Firefox, to properly render svg inside
+                // iframes, see http://stackoverflow.com/questions/10177190/
+                // svg-dynamically-added-to-iframe-does-not-render-correctly
+                this.contentDocument.open();
+
+                // Insert the subarea into the iframe
+                // We must directly write the html. When using Jquery's append
+                // method, javascript is evaluated in the parent document and
+                // not in the iframe document.
+                this.contentDocument.write(subarea.html());
+
+                this.contentDocument.close();
+
+                var body = this.contentDocument.body;
+                // Adjust the iframe height automatically
+                iframe.height(body.scrollHeight + 'px');
+            });
+
+            // Elements should be appended to the inner subarea and not to the
+            // iframe
+            iframe.append = function(that) {
+                subarea.append(that);
+            };
+
+            return iframe;
+        } else {
+            return subarea;
+        }
+    }
+
+
+    OutputArea.prototype._append_javascript_error = function (err, element) {
         // display a message when a javascript error occurs in display output
         var msg = "Javascript error adding output!"
-        console.log(msg, err);
-        if ( container === undefined ) return;
-        container.append(
+        if ( element === undefined ) return;
+        element.append(
             $('<div/>').html(msg + "<br/>" +
                 err.toString() +
                 '<br/>See your browser Javascript console for more details.'
             ).addClass('js-error')
         );
-        container.show();
     };
     
     OutputArea.prototype._safe_append = function (toinsert) {
@@ -350,7 +392,13 @@ var IPython = (function (IPython) {
             this.element.append(toinsert);
         } catch(err) {
             console.log(err);
-            this._append_javascript_error(err, this.element);
+            // Create an actual output_area and output_subarea, which creates
+            // the prompt area and the proper indentation.
+            var toinsert = this.create_output_area();
+            var subarea = $('<div/>').addClass('output_subarea');
+            toinsert.append(subarea);
+            this._append_javascript_error(err, subarea);
+            this.element.append(toinsert);
         }
     };
 
@@ -460,7 +508,7 @@ var IPython = (function (IPython) {
 
 
     OutputArea.prototype.append_html = function (html, md, element) {
-        var toinsert = $("<div/>").addClass("output_subarea output_html rendered_html");
+        var toinsert = this.create_output_subarea(md, "output_html rendered_html");
         toinsert.append(html);
         element.append(toinsert);
     };
@@ -468,22 +516,19 @@ var IPython = (function (IPython) {
 
     OutputArea.prototype.append_javascript = function (js, md, container) {
         // We just eval the JS code, element appears in the local scope.
-        var element = $("<div/>").addClass("output_subarea");
+        var element = this.create_output_subarea(md, "output_javascript");
         container.append(element);
-        // Div for js shouldn't be drawn, as it will add empty height to the area.
-        container.hide();
-        // If the Javascript appends content to `element` that should be drawn, then
-        // it must also call `container.show()`.
         try {
             eval(js);
         } catch(err) {
-            this._append_javascript_error(err, container);
+            console.log(err);
+            this._append_javascript_error(err, element);
         }
     };
 
 
     OutputArea.prototype.append_text = function (data, md, element, extra_class) {
-        var toinsert = $("<div/>").addClass("output_subarea output_text");
+        var toinsert = this.create_output_subarea(md, "output_text");
         // escape ANSI & HTML specials in plaintext:
         data = utils.fixConsole(data);
         data = utils.fixCarriageReturn(data);
@@ -497,7 +542,7 @@ var IPython = (function (IPython) {
 
 
     OutputArea.prototype.append_svg = function (svg, md, element) {
-        var toinsert = $("<div/>").addClass("output_subarea output_svg");
+        var toinsert = this.create_output_subarea(md, "output_svg");
         toinsert.append(svg);
         element.append(toinsert);
     };
@@ -531,13 +576,14 @@ var IPython = (function (IPython) {
 
 
     OutputArea.prototype.append_png = function (png, md, element) {
-        var toinsert = $("<div/>").addClass("output_subarea output_png");
-        var img = $("<img/>").attr('src','data:image/png;base64,'+png);
+        var toinsert = this.create_output_subarea(md, "output_png");
+        var img = $("<img/>");
+        img[0].setAttribute('src','data:image/png;base64,'+png);
         if (md['height']) {
-            img.attr('height', md['height']);
+            img[0].setAttribute('height', md['height']);
         }
         if (md['width']) {
-            img.attr('width', md['width']);
+            img[0].setAttribute('width', md['width']);
         }
         this._dblclick_to_reset_size(img);
         toinsert.append(img);
@@ -546,7 +592,7 @@ var IPython = (function (IPython) {
 
 
     OutputArea.prototype.append_jpeg = function (jpeg, md, element) {
-        var toinsert = $("<div/>").addClass("output_subarea output_jpeg");
+        var toinsert = this.create_output_subarea(md, "output_jpeg");
         var img = $("<img/>").attr('src','data:image/jpeg;base64,'+jpeg);
         if (md['height']) {
             img.attr('height', md['height']);
@@ -563,7 +609,7 @@ var IPython = (function (IPython) {
     OutputArea.prototype.append_latex = function (latex, md, element) {
         // This method cannot do the typesetting because the latex first has to
         // be on the page.
-        var toinsert = $("<div/>").addClass("output_subarea output_latex");
+        var toinsert = this.create_output_subarea(md, "output_latex");
         toinsert.append(latex);
         element.append(toinsert);
     };

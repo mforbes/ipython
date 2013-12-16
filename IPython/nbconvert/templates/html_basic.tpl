@@ -2,7 +2,7 @@
 
 
 {% block codecell %}
-<div class="cell border-box-sizing code_cell vbox">
+<div class="cell border-box-sizing code_cell">
 {{ super() }}
 </div>
 {%- endblock codecell %}
@@ -15,7 +15,7 @@
 
 {% block output_group %}
 <div class="output_wrapper">
-<div class="output vbox">
+<div class="output">
 {{ super() }}
 </div>
 </div>
@@ -64,10 +64,6 @@ In&nbsp;[{{ cell.prompt_number }}]:
 {{ ("#" * cell.level + cell.source) | replace('\n', ' ')  | markdown2html | strip_files_prefix | add_anchor }}
 </div>
 {% endblock headingcell %}
-
-{% block rawcell scoped %}
-{{ cell.source }}
-{% endblock rawcell %}
 
 {% block unknowncell scoped %}
 unknown type  {{ cell.type }}

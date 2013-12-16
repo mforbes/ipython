@@ -41,22 +41,32 @@ from IPython.utils.traitlets import Integer, CBool, Unicode
 def get_default_editor():
     try:
         ed = os.environ['EDITOR']
+        if not py3compat.PY3:
+            ed = ed.decode()
+        return ed
     except KeyError:
-        if os.name == 'posix':
-            ed = 'vi'  # the only one guaranteed to be there!
-        else:
-            ed = 'notepad' # same in Windows!
-    return ed
+        pass
+    except UnicodeError:
+        warn("$EDITOR environment variable is not pure ASCII. Using platform "
+             "default editor.")
 
+    if os.name == 'posix':
+        return 'vi'  # the only one guaranteed to be there!
+    else:
+        return 'notepad' # same in Windows!
 
-def get_pasted_lines(sentinel, l_input=py3compat.input):
+def get_pasted_lines(sentinel, l_input=py3compat.input, quiet=False):
     """ Yield pasted lines until the user enters the given sentinel value.
     """
-    print("Pasting code; enter '%s' alone on the line to stop or use Ctrl-D." \
-          % sentinel)
+    if not quiet:
+        print("Pasting code; enter '%s' alone on the line to stop or use Ctrl-D." \
+              % sentinel)
+        prompt = ":"
+    else:
+        prompt = ""
     while True:
         try:
-            l = l_input(':')
+            l = l_input(prompt)
             if l == sentinel:
                 return
             else:
@@ -127,7 +137,7 @@ class TerminalMagics(Magics):
 
         You must terminate the block with '--' (two minus-signs) or Ctrl-D
         alone on the line. You can also provide your own sentinel with '%paste
-        -s %%' ('%%' is the new sentinel for this operation)
+        -s %%' ('%%' is the new sentinel for this operation).
 
         The block is dedented prior to execution to enable execution of method
         definitions. '>' and '+' characters at the beginning of a line are
@@ -141,6 +151,7 @@ class TerminalMagics(Magics):
         dedenting or executing it (preceding >>> and + is still stripped)
 
         '%cpaste -r' re-executes the block previously entered by cpaste.
+        '%cpaste -q' suppresses any additional output messages.
 
         Do not be alarmed by garbled output on Windows (it's a readline bug).
         Just press enter and type -- (and press enter again) and the block
@@ -163,13 +174,15 @@ class TerminalMagics(Magics):
           :--
           Hello world!
         """
-        opts, name = self.parse_options(parameter_s, 'rs:', mode='string')
+        opts, name = self.parse_options(parameter_s, 'rqs:', mode='string')
         if 'r' in opts:
             self.rerun_pasted()
             return
 
+        quiet = ('q' in opts)
+
         sentinel = opts.get('s', '--')
-        block = '\n'.join(get_pasted_lines(sentinel))
+        block = '\n'.join(get_pasted_lines(sentinel, quiet=quiet))
         self.store_or_execute(block, name)
 
     @line_magic
@@ -191,8 +204,7 @@ class TerminalMagics(Magics):
         This assigns the pasted block to variable 'foo' as string, without
         executing it (preceding >>> and + is still stripped).
 
-        Options
-        -------
+        Options:
 
           -r: re-executes the block previously entered by cpaste.
 
@@ -561,19 +573,12 @@ class TerminalInteractiveShell(InteractiveShell):
         The returned line does not include the trailing newline.
         When the user enters the EOF key sequence, EOFError is raised.
 
-        Optional inputs:
+        Parameters
+        ----------
 
-          - prompt(''): a string to be printed to prompt the user.
-
-          - continue_prompt(False): whether this line is the first one or a
-          continuation in a sequence of inputs.
+        prompt : str, optional
+          A string to be printed to prompt the user.
         """
-        # Code run by the user may have modified the readline completer state.
-        # We must ensure that our completer is back in place.
-
-        if self.has_readline:
-            self.set_readline_completer()
-        
         # raw_input expects str, but we pass it unicode sometimes
         prompt = py3compat.cast_bytes_py2(prompt)
 

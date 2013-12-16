@@ -1,4 +1,4 @@
-"""This module defines Exporter, a highly configurable converter
+"""This module defines TemplateExporter, a highly configurable converter
 that uses Jinja2 to export notebook files into different formats.
 """
 
@@ -27,6 +27,7 @@ from IPython.utils.traitlets import MetaHasTraits, Unicode, List, Dict, Any
 from IPython.utils.importstring import import_item
 from IPython.utils import py3compat, text
 
+from IPython.nbformat.current import docstring_nbformat_mod
 from IPython.nbconvert import filters
 from .exporter import Exporter
 
@@ -43,8 +44,8 @@ default_filters = {
         'ansi2html': filters.ansi2html,
         'filter_data_type': filters.DataTypeFilter,
         'get_lines': filters.get_lines,
-        'highlight2html': filters.highlight2html,
-        'highlight2latex': filters.highlight2latex,
+        'highlight2html': filters.Highlight2Html,
+        'highlight2latex': filters.Highlight2Latex,
         'ipython2python': filters.ipython2python,
         'posix_path': filters.posix_path,
         'markdown2latex': filters.markdown2latex,
@@ -125,6 +126,13 @@ class TemplateExporter(Exporter):
         help="""Dictionary of filters, by name and namespace, to add to the Jinja
         environment.""")
 
+    raw_mimetype = Unicode('')
+    raw_mimetypes = List(config=True,
+        help="""formats of raw cells to be included in this Exporter's output."""
+    )
+    def _raw_mimetypes_default(self):
+        return [self.raw_mimetype]
+
 
     def __init__(self, config=None, extra_loaders=None, **kw):
         """
@@ -186,19 +194,23 @@ class TemplateExporter(Exporter):
             else:
                 self.log.info("Loaded template %s", try_name)
                 break
-    
+
+    @docstring_nbformat_mod
     def from_notebook_node(self, nb, resources=None, **kw):
         """
         Convert a notebook from a notebook node instance.
     
         Parameters
         ----------
-        nb : Notebook node
-        resources : dict (**kw) 
-            of additional resources that can be accessed read/write by 
-            preprocessors and filters.
+        nb : :class:`~{nbformat_mod}.nbbase.NotebookNode`
+          Notebook node
+        resources : dict
+          Additional resources that can be accessed read/write by
+          preprocessors and filters.
         """
         nb_copy, resources = super(TemplateExporter, self).from_notebook_node(nb, resources, **kw)
+        resources.setdefault('raw_mimetype', self.raw_mimetype)
+        resources.setdefault('raw_mimetypes', self.raw_mimetypes)
 
         self._load_template()
 

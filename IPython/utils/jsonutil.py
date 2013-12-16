@@ -33,8 +33,8 @@ next_attr_name = '__next__' if py3compat.PY3 else 'next'
 #-----------------------------------------------------------------------------
 
 # timestamp formats
-ISO8601="%Y-%m-%dT%H:%M:%S.%f"
-ISO8601_PAT=re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+)Z?([\+\-]\d{2}:?\d{2})?$")
+ISO8601 = "%Y-%m-%dT%H:%M:%S.%f"
+ISO8601_PAT=re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{1,6})Z?([\+\-]\d{2}:?\d{2})?$")
 
 #-----------------------------------------------------------------------------
 # Classes and functions
@@ -62,22 +62,34 @@ def rekey(dikt):
             dikt[nk] = dikt.pop(k)
     return dikt
 
+def parse_date(s):
+    """parse an ISO8601 date string
+    
+    If it is None or not a valid ISO8601 timestamp,
+    it will be returned unmodified.
+    Otherwise, it will return a datetime object.
+    """
+    if s is None:
+        return s
+    m = ISO8601_PAT.match(s)
+    if m:
+        # FIXME: add actual timezone support
+        # this just drops the timezone info
+        notz = m.groups()[0]
+        return datetime.strptime(notz, ISO8601)
+    return s
 
 def extract_dates(obj):
     """extract ISO8601 dates from unpacked JSON"""
     if isinstance(obj, dict):
-        obj = dict(obj) # don't clobber
+        new_obj = {} # don't clobber
         for k,v in iteritems(obj):
-            obj[k] = extract_dates(v)
+            new_obj[k] = extract_dates(v)
+        obj = new_obj
     elif isinstance(obj, (list, tuple)):
         obj = [ extract_dates(o) for o in obj ]
     elif isinstance(obj, string_types):
-        m = ISO8601_PAT.match(obj)
-        if m:
-            # FIXME: add actual timezone support
-            # this just drops the timezone info
-            notz = m.groups()[0]
-            obj = datetime.strptime(notz, ISO8601)
+        obj = parse_date(obj)
     return obj
 
 def squash_dates(obj):
@@ -182,9 +194,8 @@ def json_clean(obj):
     >>> json_clean(True)
     True
     """
-    # types that are 'atomic' and ok in json as-is.  bool doesn't need to be
-    # listed explicitly because bools pass as int instances
-    atomic_ok = (unicode_type, int, type(None))
+    # types that are 'atomic' and ok in json as-is.
+    atomic_ok = (unicode_type, type(None))
 
     # containers that we need to convert into lists
     container_to_list = (tuple, set, types.GeneratorType)
@@ -193,7 +204,14 @@ def json_clean(obj):
         # cast out-of-range floats to their reprs
         if math.isnan(obj) or math.isinf(obj):
             return repr(obj)
-        return obj
+        return float(obj)
+    
+    if isinstance(obj, int):
+        # cast int to int, in case subclasses override __str__ (e.g. boost enum, #4598)
+        if isinstance(obj, bool):
+            # bools are ints, but we don't want to cast them to 0,1
+            return obj
+        return int(obj)
 
     if isinstance(obj, atomic_ok):
         return obj

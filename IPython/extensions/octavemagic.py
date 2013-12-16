@@ -42,6 +42,7 @@ To enable the magics below, execute ``%load_ext octavemagic``.
 import tempfile
 from glob import glob
 from shutil import rmtree
+import sys
 
 import numpy as np
 import oct2py
@@ -55,6 +56,7 @@ from IPython.core.magic_arguments import (
     argument, magic_arguments, parse_argstring
 )
 from IPython.utils.py3compat import unicode_to_str
+from IPython.utils.text import dedent
 
 class OctaveMagicError(oct2py.Oct2PyError):
     pass
@@ -77,7 +79,11 @@ class OctaveMagics(Magics):
         """
         super(OctaveMagics, self).__init__(shell)
         self._oct = oct2py.Oct2Py()
-        self._plot_format = 'png'
+        if sys.platform == 'win32':
+            # Use svg by default due to lack of Ghostscript on Windows Octave
+            self._plot_format = 'svg'
+        else:
+            self._plot_format = 'png'
 
         # Allow publish_display_data to be overridden for
         # testing purposes.
@@ -145,6 +151,8 @@ class OctaveMagics(Magics):
         '''
         Line-level magic that pulls a variable from Octave.
 
+        ::
+
             In [18]: _ = %octave x = [1 2; 3 4]; y = 'hello'
 
             In [19]: %octave_pull x y
@@ -195,7 +203,7 @@ class OctaveMagics(Magics):
     def octave(self, line, cell=None, local_ns=None):
         '''
         Execute code in Octave, and pull some of the results back into the
-        Python namespace.
+        Python namespace::
 
             In [9]: %octave X = [1 2; 3 4]; mean(X)
             Out[9]: array([[ 2., 3.]])
@@ -209,9 +217,9 @@ class OctaveMagics(Magics):
 
             -2*x^4 - 1*x^3 + 0*x^2 + 1*x^1 + 2
 
-        In the notebook, plots are published as the output of the cell, e.g.
+        In the notebook, plots are published as the output of the cell, e.g.::
 
-        %octave plot([1 2 3], [4 5 6])
+            %octave plot([1 2 3], [4 5 6])
 
         will create a line plot.
 
@@ -270,6 +278,9 @@ class OctaveMagics(Magics):
 
         if args.format is not None:
             plot_format = args.format
+        elif sys.platform == 'win32':
+            # Use svg by default due to lack of Ghostscript on Windows Octave
+            plot_format = 'svg'
         else:
             plot_format = 'png'
 
@@ -360,9 +371,9 @@ class OctaveMagics(Magics):
 
 
 __doc__ = __doc__.format(
-    OCTAVE_DOC = ' '*8 + OctaveMagics.octave.__doc__,
-    OCTAVE_PUSH_DOC = ' '*8 + OctaveMagics.octave_push.__doc__,
-    OCTAVE_PULL_DOC = ' '*8 + OctaveMagics.octave_pull.__doc__
+    OCTAVE_DOC = dedent(OctaveMagics.octave.__doc__),
+    OCTAVE_PUSH_DOC = dedent(OctaveMagics.octave_push.__doc__),
+    OCTAVE_PULL_DOC = dedent(OctaveMagics.octave_pull.__doc__)
     )
 
 

@@ -761,8 +761,8 @@ class Instance(ClassBasedTraitType):
         allow_none : bool
             Indicates whether None is allowed as a value.
 
-        Default Value
-        -------------
+        Notes
+        -----
         If both ``args`` and ``kw`` are None, then the default value is None.
         If ``args`` is a tuple and ``kw`` is a dict, then the default is
         created as ``klass(*args, **kw)``.  If either ``args`` or ``kw`` is
@@ -1024,7 +1024,11 @@ class Unicode(TraitType):
         if isinstance(value, py3compat.unicode_type):
             return value
         if isinstance(value, bytes):
-            return py3compat.unicode_type(value)
+            try:
+                return value.decode('ascii', 'strict')
+            except UnicodeDecodeError:
+                msg = "Could not decode {!r} for unicode trait '{}' of {} instance."
+                raise TraitError(msg.format(value, self.name, class_of(obj)))
         self.error(obj, value)
 
 

@@ -81,9 +81,9 @@ def squash_unicode(obj):
 
 # ISO8601-ify datetime objects
 json_packer = lambda obj: jsonapi.dumps(obj, default=date_default)
-json_unpacker = lambda s: extract_dates(jsonapi.loads(s))
+json_unpacker = lambda s: jsonapi.loads(s)
 
-pickle_packer = lambda o: pickle.dumps(o,-1)
+pickle_packer = lambda o: pickle.dumps(squash_dates(o),-1)
 pickle_unpacker = pickle.loads
 
 default_packer = json_packer
@@ -429,7 +429,7 @@ class Session(Configurable):
         return str(uuid.uuid4())
 
     def _check_packers(self):
-        """check packers for binary data and datetime support."""
+        """check packers for datetime support."""
         pack = self.pack
         unpack = self.unpack
 
@@ -469,9 +469,11 @@ class Session(Configurable):
         msg = dict(t=datetime.now())
         try:
             unpacked = unpack(pack(msg))
+            if isinstance(unpacked['t'], datetime):
+                raise ValueError("Shouldn't deserialize to datetime")
         except Exception:
             self.pack = lambda o: pack(squash_dates(o))
-            self.unpack = lambda s: extract_dates(unpack(s))
+            self.unpack = lambda s: unpack(s)
 
     def msg_header(self, msg_type):
         return msg_header(self.msg_id, msg_type, self.username, self.session)
@@ -525,11 +527,13 @@ class Session(Configurable):
         Returns
         -------
         msg_list : list
-            The list of bytes objects to be sent with the format:
-            [ident1,ident2,...,DELIM,HMAC,p_header,p_parent,p_metadata,p_content,
-             buffer1,buffer2,...]. In this list, the p_* entities are
-            the packed or serialized versions, so if JSON is used, these
-            are utf8 encoded JSON strings.
+            The list of bytes objects to be sent with the format::
+
+                [ident1, ident2, ..., DELIM, HMAC, p_header, p_parent,
+                 p_metadata, p_content, buffer1, buffer2, ...]
+
+            In this list, the ``p_*`` entities are the packed or serialized
+            versions, so if JSON is used, these are utf8 encoded JSON strings.
         """
         content = msg.get('content', {})
         if content is None:
@@ -779,8 +783,8 @@ class Session(Configurable):
         methods work with full message lists, whereas pack/unpack work with
         the individual message parts in the message list.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         msg_list : list of bytes or Message objects
             The list of message parts of the form [HMAC,p_header,p_parent,
             p_metadata,p_content,buffer1,buffer2,...].
@@ -815,10 +819,10 @@ class Session(Configurable):
         if not len(msg_list) >= minlen:
             raise TypeError("malformed message, must have at least %i elements"%minlen)
         header = self.unpack(msg_list[1])
-        message['header'] = header
+        message['header'] = extract_dates(header)
         message['msg_id'] = header['msg_id']
         message['msg_type'] = header['msg_type']
-        message['parent_header'] = self.unpack(msg_list[2])
+        message['parent_header'] = extract_dates(self.unpack(msg_list[2]))
         message['metadata'] = self.unpack(msg_list[3])
         if content:
             message['content'] = self.unpack(msg_list[4])

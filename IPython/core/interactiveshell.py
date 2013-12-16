@@ -131,9 +131,9 @@ def get_default_colors():
 
 
 class SeparateUnicode(Unicode):
-    """A Unicode subclass to validate separate_in, separate_out, etc.
+    r"""A Unicode subclass to validate separate_in, separate_out, etc.
 
-    This is a Unicode based trait that converts '0'->'' and '\\n'->'\n'.
+    This is a Unicode based trait that converts '0'->'' and ``'\\n'->'\n'``.
     """
 
     def validate(self, obj, value):
@@ -2536,13 +2536,13 @@ class InteractiveShell(SingletonConfigurable):
                 self.showtraceback()
 
     def safe_execfile_ipy(self, fname):
-        """Like safe_execfile, but for .ipy files with IPython syntax.
+        """Like safe_execfile, but for .ipy or .ipynb files with IPython syntax.
 
         Parameters
         ----------
         fname : str
             The name of the file to execute.  The filename must have a
-            .ipy extension.
+            .ipy or .ipynb extension.
         """
         fname = os.path.abspath(os.path.expanduser(fname))
 
@@ -2558,15 +2558,30 @@ class InteractiveShell(SingletonConfigurable):
         # behavior of running a script from the system command line, where
         # Python inserts the script's directory into sys.path
         dname = os.path.dirname(fname)
+        
+        def get_cells():
+            """generator for sequence of code blocks to run"""
+            if fname.endswith('.ipynb'):
+                from IPython.nbformat import current
+                with open(fname) as f:
+                    nb = current.read(f, 'json')
+                    if not nb.worksheets:
+                        return
+                    for cell in nb.worksheets[0].cells:
+                        if cell.cell_type == 'code':
+                            yield cell.input
+            else:
+                with open(fname) as f:
+                    yield f.read()
 
         with prepended_to_syspath(dname):
             try:
-                with open(fname) as thefile:
+                for cell in get_cells():
                     # self.run_cell currently captures all exceptions
                     # raised in user code.  It would be nice if there were
-                    # versions of runlines, execfile that did raise, so
+                    # versions of run_cell that did raise, so
                     # we could catch the errors.
-                    self.run_cell(thefile.read(), store_history=False, shell_futures=False)
+                    self.run_cell(cell, store_history=False, shell_futures=False)
             except:
                 self.showtraceback()
                 warn('Unknown failure executing file: <%s>' % fname)
@@ -3035,15 +3050,17 @@ class InteractiveShell(SingletonConfigurable):
             arguments as strings. The number before the / is the session
             number: ~n goes n back from the current session.
 
-        Optional Parameters:
-          - raw(False): by default, the processed input is used.  If this is
-            true, the raw input history is used instead.
+        raw : bool, optional
+            By default, the processed input is used.  If this is true, the raw
+            input history is used instead.
 
-        Note that slices can be called with two notations:
+        Notes
+        -----
 
-        N:M -> standard python form, means including items N...(M-1).
+        Slices can be described with two notations:
 
-        N-M -> include items N..M (closed endpoint).
+        * ``N:M`` -> standard python form, means including items N...(M-1).
+        * ``N-M`` -> include items N..M (closed endpoint).
         """
         lines = self.history_manager.get_range_by_str(range_str, raw=raw)
         return "\n".join(x for _, _, x in lines)
@@ -3088,7 +3105,11 @@ class InteractiveShell(SingletonConfigurable):
                 return openpy.read_py_url(utarget, skip_encoding_cookie=skip_encoding_cookie)
         except UnicodeDecodeError:
             if not py_only :
-                from urllib import urlopen  # Deferred import
+                # Deferred import
+                try:
+                    from urllib.request import urlopen  # Py3
+                except ImportError:
+                    from urllib import urlopen
                 response = urlopen(target)
                 return response.read().decode('latin1')
             raise ValueError(("'%s' seem to be unreadable.") % utarget)

@@ -25,6 +25,7 @@ from types import ModuleType
 import zmq
 
 from IPython.testing.skipdoctest import skip_doctest
+from IPython.utils import pickleutil
 from IPython.utils.traitlets import (
     HasTraits, Any, Bool, List, Dict, Set, Instance, CFloat, Integer
 )
@@ -221,30 +222,27 @@ class View(HasTraits):
         raise NotImplementedError("Implement in subclasses")
 
     def apply(self, f, *args, **kwargs):
-        """calls f(*args, **kwargs) on remote engines, returning the result.
+        """calls ``f(*args, **kwargs)`` on remote engines, returning the result.
 
         This method sets all apply flags via this View's attributes.
 
-        if self.block is False:
-            returns AsyncResult
-        else:
-            returns actual result of f(*args, **kwargs)
+        Returns :class:`~IPython.parallel.client.asyncresult.AsyncResult`
+        instance if ``self.block`` is False, otherwise the return value of
+        ``f(*args, **kwargs)``.
         """
         return self._really_apply(f, args, kwargs)
 
     def apply_async(self, f, *args, **kwargs):
-        """calls f(*args, **kwargs) on remote engines in a nonblocking manner.
+        """calls ``f(*args, **kwargs)`` on remote engines in a nonblocking manner.
 
-        returns AsyncResult
+        Returns :class:`~IPython.parallel.client.asyncresult.AsyncResult` instance.
         """
         return self._really_apply(f, args, kwargs, block=False)
 
     @spin_after
     def apply_sync(self, f, *args, **kwargs):
-        """calls f(*args, **kwargs) on remote engines in a blocking manner,
+        """calls ``f(*args, **kwargs)`` on remote engines in a blocking manner,
          returning the result.
-
-        returns: actual result of f(*args, **kwargs)
         """
         return self._really_apply(f, args, kwargs, block=True)
 
@@ -320,8 +318,7 @@ class View(HasTraits):
     def get_result(self, indices_or_msg_ids=None):
         """return one or more results, specified by history index or msg_id.
 
-        See client.get_result for details.
-
+        See :meth:`IPython.parallel.client.client.Client.get_result` for details.
         """
 
         if indices_or_msg_ids is None:
@@ -345,9 +342,9 @@ class View(HasTraits):
         raise NotImplementedError
 
     def map_async(self, f, *sequences, **kwargs):
-        """Parallel version of builtin `map`, using this view's engines.
+        """Parallel version of builtin :func:`python:map`, using this view's engines.
 
-        This is equivalent to map(...block=False)
+        This is equivalent to ``map(...block=False)``.
 
         See `self.map` for details.
         """
@@ -357,9 +354,9 @@ class View(HasTraits):
         return self.map(f,*sequences,**kwargs)
 
     def map_sync(self, f, *sequences, **kwargs):
-        """Parallel version of builtin `map`, using this view's engines.
+        """Parallel version of builtin :func:`python:map`, using this view's engines.
 
-        This is equivalent to map(...block=True)
+        This is equivalent to ``map(...block=True)``.
 
         See `self.map` for details.
         """
@@ -369,7 +366,7 @@ class View(HasTraits):
         return self.map(f,*sequences,**kwargs)
 
     def imap(self, f, *sequences, **kwargs):
-        """Parallel version of `itertools.imap`.
+        """Parallel version of :func:`itertools.imap`.
 
         See `self.map` for details.
 
@@ -511,6 +508,16 @@ class DirectView(View):
         for r in results:
             # raise possible remote ImportErrors here
             r.get()
+    
+    def use_dill(self):
+        """Expand serialization support with dill
+        
+        adds support for closures, etc.
+        
+        This calls IPython.utils.pickleutil.use_dill() here and on each engine.
+        """
+        pickleutil.use_dill()
+        return self.apply(pickleutil.use_dill)
 
 
     @sync_results
@@ -575,7 +582,7 @@ class DirectView(View):
 
     @sync_results
     def map(self, f, *sequences, **kwargs):
-        """view.map(f, *sequences, block=self.block) => list|AsyncMapResult
+        """``view.map(f, *sequences, block=self.block)`` => list|AsyncMapResult
 
         Parallel version of builtin `map`, using this View's `targets`.
 
@@ -597,14 +604,14 @@ class DirectView(View):
         Returns
         -------
 
-        if block=False:
-            AsyncMapResult
-                An object like AsyncResult, but which reassembles the sequence of results
-                into a single list. AsyncMapResults can be iterated through before all
-                results are complete.
-        else:
-            list
-                the result of map(f,*sequences)
+
+        If block=False
+          An :class:`~IPython.parallel.client.asyncresult.AsyncMapResult` instance.
+          An object like AsyncResult, but which reassembles the sequence of results
+          into a single list. AsyncMapResults can be iterated through before all
+          results are complete.
+        else
+            A list, the result of ``map(f,*sequences)``
         """
 
         block = kwargs.pop('block', self.block)
@@ -1056,7 +1063,7 @@ class LoadBalancedView(View):
     @sync_results
     @save_ids
     def map(self, f, *sequences, **kwargs):
-        """view.map(f, *sequences, block=self.block, chunksize=1, ordered=True) => list|AsyncMapResult
+        """``view.map(f, *sequences, block=self.block, chunksize=1, ordered=True)`` => list|AsyncMapResult
 
         Parallel version of builtin `map`, load-balanced by this View.
 
@@ -1091,14 +1098,13 @@ class LoadBalancedView(View):
         Returns
         -------
 
-        if block=False:
-            AsyncMapResult
-                An object like AsyncResult, but which reassembles the sequence of results
-                into a single list. AsyncMapResults can be iterated through before all
-                results are complete.
-            else:
-                the result of map(f,*sequences)
-
+        if block=False
+          An :class:`~IPython.parallel.client.asyncresult.AsyncMapResult` instance.
+          An object like AsyncResult, but which reassembles the sequence of results
+          into a single list. AsyncMapResults can be iterated through before all
+          results are complete.
+        else
+            A list, the result of ``map(f,*sequences)``
         """
 
         # default

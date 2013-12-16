@@ -59,17 +59,17 @@ def full_path(startPath,files):
     """Make full paths for all the listed files, based on startPath.
 
     Only the base part of startPath is kept, since this routine is typically
-    used with a script's __file__ variable as startPath.  The base of startPath
+    used with a script's ``__file__`` variable as startPath. The base of startPath
     is then prepended to all the listed files, forming the output list.
 
     Parameters
     ----------
-      startPath : string
-        Initial path to use as the base for the results.  This path is split
+    startPath : string
+      Initial path to use as the base for the results.  This path is split
       using os.path.split() and only its first component is kept.
 
-      files : string or list
-        One or more files.
+    files : string or list
+      One or more files.
 
     Examples
     --------
@@ -80,9 +80,10 @@ def full_path(startPath,files):
     >>> full_path('/foo',['a.txt','b.txt'])
     ['/a.txt', '/b.txt']
 
-    If a single file is given, the output is still a list:
-    >>> full_path('/foo','a.txt')
-    ['/a.txt']
+    If a single file is given, the output is still a list::
+
+        >>> full_path('/foo','a.txt')
+        ['/a.txt']
     """
 
     files = list_strings(files)
@@ -105,7 +106,8 @@ def parse_test_output(txt):
 
     Returns
     -------
-    nerr, nfail: number of errors and failures.
+    nerr, nfail
+      number of errors and failures.
     """
 
     err_m = re.search(r'^FAILED \(errors=(\d+)\)', txt, re.MULTILINE)
@@ -423,7 +425,7 @@ def monkeypatch(obj, name, attr):
 
 def help_output_test(subcommand=''):
     """test that `ipython [subcommand] -h` works"""
-    cmd = ' '.join(get_ipython_cmd() + [subcommand, '-h'])
+    cmd = get_ipython_cmd() + [subcommand, '-h']
     out, err, rc = get_output_error_code(cmd)
     nt.assert_equal(rc, 0, err)
     nt.assert_not_in("Traceback", err)
@@ -434,7 +436,7 @@ def help_output_test(subcommand=''):
 
 def help_all_output_test(subcommand=''):
     """test that `ipython [subcommand] --help-all` works"""
-    cmd = ' '.join(get_ipython_cmd() + [subcommand, '--help-all'])
+    cmd = get_ipython_cmd() + [subcommand, '--help-all']
     out, err, rc = get_output_error_code(cmd)
     nt.assert_equal(rc, 0, err)
     nt.assert_not_in("Traceback", err)

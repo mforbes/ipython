@@ -20,6 +20,7 @@ import bdb
 import os
 import sys
 import time
+from pdb import Restart
 
 # cProfile was added in Python2.5
 try:
@@ -551,7 +552,7 @@ python-profiler package from non-free.""")
           details on the options available specifically for profiling.
 
         There is one special usage for which the text above doesn't apply:
-        if the filename ends with .ipy, the file is run as ipython script,
+        if the filename ends with .ipy[nb], the file is run as ipython script,
         just as if the commands were written on IPython prompt.
 
         -m
@@ -595,7 +596,7 @@ python-profiler package from non-free.""")
             error(msg)
             return
 
-        if filename.lower().endswith('.ipy'):
+        if filename.lower().endswith(('.ipy', '.ipynb')):
             with preserve_keys(self.shell.user_ns, '__file__'):
                 self.shell.user_ns['__file__'] = filename
                 self.shell.safe_execfile_ipy(filename)
@@ -665,7 +666,11 @@ python-profiler package from non-free.""")
                     'modulename': modulename,
                 }
             else:
-                code = 'execfile(filename, prog_ns)'
+                if 'd' in opts:
+                    # allow exceptions to raise in debug mode
+                    code = 'execfile(filename, prog_ns, raise_exceptions=True)'
+                else:
+                    code = 'execfile(filename, prog_ns)'
                 code_ns = {
                     'execfile': self.shell.safe_execfile,
                     'prog_ns': prog_ns,
@@ -807,7 +812,18 @@ python-profiler package from non-free.""")
             if filename:
                 # save filename so it can be used by methods on the deb object
                 deb._exec_filename = filename
-            deb.run(code, code_ns)
+            while True:
+                try:
+                    deb.run(code, code_ns)
+                except Restart:
+                    print("Restarting")
+                    if filename:
+                        deb._wait_for_mainpyfile = True
+                        deb.mainpyfile = deb.canonic(filename)
+                    continue
+                else:
+                    break
+            
 
         except:
             etype, value, tb = sys.exc_info()

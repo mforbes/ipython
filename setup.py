@@ -68,6 +68,7 @@ from setupbase import (
     require_submodules,
     UpdateSubmodules,
     CompileCSS,
+    JavascriptVersion,
     install_symlinked,
     install_lib_symlink,
     install_scripts_for_symlink,
@@ -236,6 +237,7 @@ setup_args['cmdclass'] = {
     'symlink': install_symlinked,
     'install_lib_symlink': install_lib_symlink,
     'install_scripts_sym': install_scripts_for_symlink,
+    'jsversion' : JavascriptVersion,
 }
 
 #---------------------------------------------------------------------------
@@ -273,7 +275,7 @@ if 'setuptools' in sys.modules:
         parallel = 'pyzmq>=2.1.11',
         qtconsole = ['pyzmq>=2.1.11', 'pygments'],
         zmq = 'pyzmq>=2.1.11',
-        doc = 'Sphinx>=0.3',
+        doc = ['Sphinx>=1.1', 'numpydoc'],
         test = 'nose>=0.10.1',
         notebook = ['tornado>=3.1', 'pyzmq>=2.1.11', 'jinja2'],
         nbconvert = ['pygments', 'jinja2', 'Sphinx>=0.3']

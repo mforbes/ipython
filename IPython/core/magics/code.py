@@ -235,7 +235,11 @@ class CodeMagics(Magics):
             print(e.args[0])
             return
 
-        from urllib2 import urlopen  # Deferred import
+        # Deferred import
+        try:
+            from urllib.request import urlopen # Py 3
+        except ImportError:
+            from urllib2 import urlopen
         import json
         post_data = json.dumps({
           "description": opts.get('d', "Pasted from IPython"),
@@ -271,7 +275,7 @@ class CodeMagics(Magics):
           where source can be a filename, URL, input history range or macro
 
         Options:
-        --------
+
           -r <lines>: Specify lines or ranges of lines to load from the source.
           Ranges could be specified as x-y (x..y) or in python-style x:y 
           (x..(y-1)). Both limits x and y can be left blank (meaning the 

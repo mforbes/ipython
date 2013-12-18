@@ -60,7 +60,12 @@ class TestStrings(TestsBase):
         assert '<b' in results
         assert '</b>' in results
 
-        
+    def test_add_anchor_fail(self):
+        """add_anchor does nothing when it fails"""
+        html = '<h1>Hello <br>World!</h1>'
+        results = add_anchor(html)
+        self.assertEqual(html, results)
+
     def test_strip_dollars(self):
         """strip_dollars test"""
         tests = [
@@ -87,7 +92,20 @@ class TestStrings(TestsBase):
             ('/files', '/files'), 
             ('test="/files"', 'test="/files"'), 
             ('My files are in `files/`', 'My files are in `files/`'),
-            ('<a href="files/test.html">files/test.html</a>', '<a href="test.html">files/test.html</a>')]
+            ('<a href="files/test.html">files/test.html</a>', '<a href="test.html">files/test.html</a>'),
+            ('<a href="/files/test.html">files/test.html</a>', '<a href="test.html">files/test.html</a>'),
+            ("<a href='files/test.html'>files/test.html</a>", "<a href='test.html'>files/test.html</a>"),
+            ('<img src="files/url/location.gif">', '<img src="url/location.gif">'),
+            ('<img src="/files/url/location.gif">', '<img src="url/location.gif">'),
+            ('hello![caption]', 'hello![caption]'),
+            ('hello![caption](/url/location.gif)', 'hello![caption](/url/location.gif)'),
+            ('hello![caption](url/location.gif)', 'hello![caption](url/location.gif)'),
+            ('hello![caption](url/location.gif)', 'hello![caption](url/location.gif)'),
+            ('hello![caption](files/url/location.gif)', 'hello![caption](url/location.gif)'),
+            ('hello![caption](/files/url/location.gif)', 'hello![caption](url/location.gif)'),
+            ('hello [text](/files/url/location.gif)', 'hello [text](url/location.gif)'),
+            ('hello [text space](files/url/location.gif)', 'hello [text space](url/location.gif)'),
+        ]
         for test in tests:
             self._try_files_prefix(test[0], test[1])
 

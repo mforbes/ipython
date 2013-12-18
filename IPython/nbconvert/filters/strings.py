@@ -72,7 +72,11 @@ def html2text(element):
     Analog of jQuery's $(element).text()
     """
     if isinstance(element, py3compat.string_types):
-        element = ElementTree.fromstring(element)
+        try:
+            element = ElementTree.fromstring(element)
+        except Exception:
+            # failed to parse, just return it unmodified
+            return element
     
     text = element.text or ""
     for child in element:
@@ -86,7 +90,11 @@ def add_anchor(html):
     
     For use in heading cells
     """
-    h = ElementTree.fromstring(py3compat.cast_bytes_py2(html, encoding='utf-8'))
+    try:
+        h = ElementTree.fromstring(py3compat.cast_bytes_py2(html, encoding='utf-8'))
+    except Exception:
+        # failed to parse, just return it unmodified
+        return html
     link = html2text(h).replace(' ', '-')
     h.set('id', link)
     a = ElementTree.Element("a", {"class" : "anchor-link", "href" : "#" + link})
@@ -122,19 +130,22 @@ def strip_dollars(text):
     return text.strip('$')
 
 
-files_url_pattern = re.compile(r'(src|href)\=([\'"]?)files/')
+files_url_pattern = re.compile(r'(src|href)\=([\'"]?)/?files/')
+markdown_url_pattern = re.compile(r'(!?)\[(?P<caption>.*?)\]\(/?files/(?P<location>.*?)\)')
 
 def strip_files_prefix(text):
     """
-    Fix all fake URLs that start with `files/`,
-    stripping out the `files/` prefix.
+    Fix all fake URLs that start with `files/`, stripping out the `files/` prefix.
+    Applies to both urls (for html) and relative paths (for markdown paths).
     
     Parameters
     ----------
     text : str
         Text in which to replace 'src="files/real...' with 'src="real...'
     """
-    return files_url_pattern.sub(r"\1=\2", text)
+    cleaned_text = files_url_pattern.sub(r"\1=\2", text)
+    cleaned_text = markdown_url_pattern.sub(r'\1[\2](\3)', cleaned_text)
+    return cleaned_text
 
 
 def comment_lines(text, prefix='# '):

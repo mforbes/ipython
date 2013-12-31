@@ -1,3 +1,8 @@
+"""Input transformer classes to support IPython special syntax.
+
+This includes the machinery to recognise and transform ``%magic`` commands,
+``!system`` commands, ``help?`` querying, prompt stripping, and so forth.
+"""
 import abc
 import functools
 import re
@@ -453,8 +458,7 @@ def classic_prompt():
 def ipy_prompt():
     """Strip IPython's In [1]:/...: prompts."""
     # FIXME: non-capturing version (?:...) usable?
-    # FIXME: r'^(In \[\d+\]: | {3}\.{3,}: )' clearer?
-    prompt_re = re.compile(r'^(In \[\d+\]: |\ \ \ \.\.\.+: )')
+    prompt_re = re.compile(r'^(In \[\d+\]: |\ {3,}\.{3,}: )')
     return _strip_prompts(prompt_re)
 
 

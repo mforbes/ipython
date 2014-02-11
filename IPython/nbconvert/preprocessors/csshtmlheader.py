@@ -15,8 +15,6 @@
 import os
 import io
 
-from pygments.formatters import HtmlFormatter
-
 from IPython.utils import path
 
 from .base import Preprocessor
@@ -83,13 +81,15 @@ class CSSHTMLHeaderPreprocessor(Preprocessor):
         Fills self.header with lines of CSS extracted from IPython 
         and Pygments.
         """
+        from pygments.formatters import HtmlFormatter
         
         #Clear existing header.
         header = []
         
         #Construct path to IPy CSS
-        sheet_filename = os.path.join(path.get_ipython_package_dir(), 
-            'html', 'static', 'style', 'style.min.css')
+        from IPython.html import DEFAULT_STATIC_FILES_PATH
+        sheet_filename = os.path.join(DEFAULT_STATIC_FILES_PATH,
+            'style', 'style.min.css')
         
         #Load style CSS file.
         with io.open(sheet_filename, encoding='utf-8') as file:

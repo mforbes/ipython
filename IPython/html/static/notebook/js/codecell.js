@@ -74,7 +74,7 @@ var IPython = (function (IPython) {
 
 
         var cm_overwrite_options  = {
-            onKeyEvent: $.proxy(this.handle_codemirror_keyevent,this)
+            onKeyEvent: $.proxy(this.handle_keyevent,this)
         };
 
         options = this.mergeopt(CodeCell, options, {cm_config:cm_overwrite_options});
@@ -105,6 +105,7 @@ var IPython = (function (IPython) {
         }
     };
 
+    CodeCell.msg_cells = {};
 
     CodeCell.prototype = new IPython.Cell();
 
@@ -132,11 +133,52 @@ var IPython = (function (IPython) {
         $(this.code_mirror.getInputField()).attr("spellcheck", "false");
         inner_cell.append(input_area);
         input.append(prompt).append(inner_cell);
+
+        var widget_area = $('<div/>')
+            .addClass('widget-area')
+            .hide();
+        this.widget_area = widget_area;
+        var widget_prompt = $('<div/>')
+            .addClass('prompt')
+            .appendTo(widget_area);
+        var widget_subarea = $('<div/>')
+            .addClass('widget-subarea')
+            .appendTo(widget_area);
+        this.widget_subarea = widget_subarea;
+        var widget_clear_buton = $('<button />')
+            .addClass('close')
+            .html('&times;')
+            .click(function() {
+                widget_area.slideUp('', function(){ widget_subarea.html(''); });
+                })
+            .appendTo(widget_prompt);
+
         var output = $('<div></div>');
-        cell.append(input).append(output);
+        cell.append(input).append(widget_area).append(output);
         this.element = cell;
         this.output_area = new IPython.OutputArea(output, true);
         this.completer = new IPython.Completer(this);
+    };
+
+    /** @method bind_events */
+    CodeCell.prototype.bind_events = function () {
+        IPython.Cell.prototype.bind_events.apply(this);
+        var that = this;
+
+        this.element.focusout(
+            function() { that.auto_highlight(); }
+        );
+    };
+
+    CodeCell.prototype.handle_keyevent = function (editor, event) {
+
+        // console.log('CM', this.mode, event.which, event.type)
+
+        if (this.mode === 'command') {
+            return true;
+        } else if (this.mode === 'edit') {
+            return this.handle_codemirror_keyevent(editor, event);
+        }
     };
 
     /**
@@ -151,8 +193,9 @@ var IPython = (function (IPython) {
         var that = this;
         // whatever key is pressed, first, cancel the tooltip request before
         // they are sent, and remove tooltip if any, except for tab again
+        var tooltip_closed = null;
         if (event.type === 'keydown' && event.which != key.TAB ) {
-            IPython.tooltip.remove_and_cancel_tooltip();
+            tooltip_closed = IPython.tooltip.remove_and_cancel_tooltip();
         }
 
         var cur = editor.getCursor();
@@ -160,7 +203,7 @@ var IPython = (function (IPython) {
             this.auto_highlight();
         }
 
-        if (event.keyCode === key.ENTER && (event.shiftKey || event.ctrlKey)) {
+        if (event.keyCode === key.ENTER && (event.shiftKey || event.ctrlKey || event.altKey)) {
             // Always ignore shift-enter in CodeMirror as we handle it.
             return true;
         } else if (event.which === 40 && event.type === 'keypress' && IPython.tooltip.time_before_tooltip >= 0) {
@@ -179,8 +222,32 @@ var IPython = (function (IPython) {
             } else {
                 return true;
             }
-        } else if (event.which === key.ESC) {
-            return IPython.tooltip.remove_and_cancel_tooltip(true);
+        } else if (event.which === key.ESC && event.type === 'keydown') {
+            // First see if the tooltip is active and if so cancel it.
+            if (tooltip_closed) {
+                // The call to remove_and_cancel_tooltip above in L177 doesn't pass
+                // force=true. Because of this it won't actually close the tooltip
+                // if it is in sticky mode. Thus, we have to check again if it is open
+                // and close it with force=true.
+                if (!IPython.tooltip._hidden) {
+                    IPython.tooltip.remove_and_cancel_tooltip(true);
+                }
+                // If we closed the tooltip, don't let CM or the global handlers
+                // handle this event.
+                event.stop();
+                return true;
+            }
+            if (that.code_mirror.options.keyMap === "vim-insert") {
+                // vim keyMap is active and in insert mode. In this case we leave vim
+                // insert mode, but remain in notebook edit mode.
+                // Let' CM handle this event and prevent global handling.
+                event.stop();
+                return false;
+            } else {
+                // vim keyMap is not active. Leave notebook edit mode.
+                // Don't let CM handle the event, defer to global handling.
+                return true;
+            }
         } else if (event.which === key.DOWNARROW && event.type === 'keydown') {
             // If we are not at the bottom, let CM handle the down arrow and
             // prevent the global keydown handler from handling it.
@@ -190,7 +257,7 @@ var IPython = (function (IPython) {
             } else {
                 return true;
             }
-        } else if (event.keyCode === key.TAB && event.type == 'keydown' && event.shiftKey) {
+        } else if (event.keyCode === key.TAB && event.type === 'keydown' && event.shiftKey) {
                 if (editor.somethingSelected()){
                     var anchor = editor.getCursor("anchor");
                     var head = editor.getCursor("head");
@@ -225,7 +292,6 @@ var IPython = (function (IPython) {
         return false;
     };
 
-
     // Kernel related calls.
 
     CodeCell.prototype.set_kernel = function (kernel) {
@@ -238,6 +304,13 @@ var IPython = (function (IPython) {
      */
     CodeCell.prototype.execute = function () {
         this.output_area.clear_output();
+        
+        // Clear widget area
+        this.widget_subarea.html('');
+        this.widget_subarea.height('');
+        this.widget_area.height('');
+        this.widget_area.hide();
+
         this.set_input_prompt('*');
         this.element.addClass("running");
         if (this.last_msg_id) {
@@ -245,7 +318,12 @@ var IPython = (function (IPython) {
         }
         var callbacks = this.get_callbacks();
         
+        var old_msg_id = this.last_msg_id;
         this.last_msg_id = this.kernel.execute(this.get_text(), callbacks, {silent: false, store_history: true});
+        if (old_msg_id) {
+            delete CodeCell.msg_cells[old_msg_id];
+        }
+        CodeCell.msg_cells[this.last_msg_id] = this;
     };
     
     /**
@@ -304,15 +382,32 @@ var IPython = (function (IPython) {
     // Basic cell manipulation.
 
     CodeCell.prototype.select = function () {
-        IPython.Cell.prototype.select.apply(this);
-        this.code_mirror.refresh();
-        this.code_mirror.focus();
-        this.auto_highlight();
-        // We used to need an additional refresh() after the focus, but
-        // it appears that this has been fixed in CM. This bug would show
-        // up on FF when a newly loaded markdown cell was edited.
+        var cont = IPython.Cell.prototype.select.apply(this);
+        if (cont) {
+            this.code_mirror.refresh();
+            this.auto_highlight();
+        }
+        return cont;
     };
 
+    CodeCell.prototype.render = function () {
+        var cont = IPython.Cell.prototype.render.apply(this);
+        // Always execute, even if we are already in the rendered state
+        return cont;
+    };
+    
+    CodeCell.prototype.unrender = function () {
+        // CodeCell is always rendered
+        return false;
+    };
+
+    CodeCell.prototype.edit_mode = function () {
+        var cont = IPython.Cell.prototype.edit_mode.apply(this);
+        if (cont) {
+            this.focus_editor();
+        }
+        return cont;
+    }
 
     CodeCell.prototype.select_all = function () {
         var start = {line: 0, ch: 0};
@@ -323,31 +418,40 @@ var IPython = (function (IPython) {
     };
 
 
-    CodeCell.prototype.collapse = function () {
+    CodeCell.prototype.collapse_output = function () {
         this.collapsed = true;
         this.output_area.collapse();
     };
 
 
-    CodeCell.prototype.expand = function () {
+    CodeCell.prototype.expand_output = function () {
         this.collapsed = false;
         this.output_area.expand();
+        this.output_area.unscroll_area();
     };
 
+    CodeCell.prototype.scroll_output = function () {
+        this.output_area.expand();
+        this.output_area.scroll_if_long();
+    };
 
     CodeCell.prototype.toggle_output = function () {
         this.collapsed = Boolean(1 - this.collapsed);
         this.output_area.toggle_output();
     };
 
-
     CodeCell.prototype.toggle_output_scroll = function () {
-    this.output_area.toggle_scroll();
+        this.output_area.toggle_scroll();
     };
 
 
     CodeCell.input_prompt_classical = function (prompt_value, lines_number) {
-        var ns = prompt_value || "&nbsp;";
+        var ns;
+        if (prompt_value == undefined) {
+            ns = "&nbsp;";
+        } else {
+            ns = encodeURIComponent(prompt_value);
+        }
         return 'In&nbsp;[' + ns + ']:';
     };
 
@@ -410,6 +514,7 @@ var IPython = (function (IPython) {
 
     CodeCell.prototype.clear_output = function (wait) {
         this.output_area.clear_output(wait);
+        this.set_input_prompt();
     };
 
 
@@ -430,12 +535,13 @@ var IPython = (function (IPython) {
             } else {
                 this.set_input_prompt();
             }
+            this.output_area.trusted = data.trusted || false;
             this.output_area.fromJSON(data.outputs);
             if (data.collapsed !== undefined) {
                 if (data.collapsed) {
-                    this.collapse();
+                    this.collapse_output();
                 } else {
-                    this.expand();
+                    this.expand_output();
                 }
             }
         }
@@ -452,6 +558,7 @@ var IPython = (function (IPython) {
         var outputs = this.output_area.toJSON();
         data.outputs = outputs;
         data.language = 'python';
+        data.trusted = this.output_area.trusted;
         data.collapsed = this.collapsed;
         return data;
     };

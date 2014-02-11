@@ -14,17 +14,17 @@ var IPython = (function (IPython) {
     
     var utils = IPython.utils;
 
-    var ClusterList = function (selector) {
+    var ClusterList = function (selector, options) {
         this.selector = selector;
         if (this.selector !== undefined) {
             this.element = $(selector);
             this.style();
             this.bind_events();
         }
-    };
-
-    ClusterList.prototype.baseProjectUrl = function(){
-        return this._baseProjectUrl || $('body').data('baseProjectUrl');
+        options = options || {};
+        this.options = options;
+        this.base_url = options.base_url || utils.get_body_data("baseUrl");
+        this.notebook_path = options.notebook_path || utils.get_body_data("notebookPath");
     };
 
     ClusterList.prototype.style = function () {
@@ -51,7 +51,7 @@ var IPython = (function (IPython) {
             dataType : "json",
             success : $.proxy(this.load_list_success, this)
         };
-        var url = utils.url_join_encode(this.baseProjectUrl(), 'clusters');
+        var url = utils.url_join_encode(this.base_url, 'clusters');
         $.ajax(url, settings);
     };
 
@@ -65,7 +65,7 @@ var IPython = (function (IPython) {
         var len = data.length;
         for (var i=0; i<len; i++) {
             var element = $('<div/>');
-            var item = new ClusterItem(element);
+            var item = new ClusterItem(element, this.options);
             item.update_state(data[i]);
             element.data('item', item);
             this.element.append(element);
@@ -73,16 +73,13 @@ var IPython = (function (IPython) {
     };
 
 
-    var ClusterItem = function (element) {
+    var ClusterItem = function (element, options) {
         this.element = $(element);
+        this.base_url = options.base_url || utils.get_body_data("baseUrl");
+        this.notebook_path = options.notebook_path || utils.get_body_data("notebookPath");
         this.data = null;
         this.style();
     };
-
-    ClusterItem.prototype.baseProjectUrl = function(){
-        return this._baseProjectUrl || $('body').data('baseProjectUrl');
-    };
-
 
     ClusterItem.prototype.style = function () {
         this.element.addClass('list_item').addClass("row-fluid");
@@ -100,16 +97,16 @@ var IPython = (function (IPython) {
 
     ClusterItem.prototype.state_stopped = function () {
         var that = this;
-        var profile_col = $('<span/>').addClass('profile_col span4').text(this.data.profile);
-        var status_col = $('<span/>').addClass('status_col span3').html('stopped');
-        var engines_col = $('<span/>').addClass('engine_col span3');
+        var profile_col = $('<div/>').addClass('profile_col span4').text(this.data.profile);
+        var status_col = $('<div/>').addClass('status_col span3').text('stopped');
+        var engines_col = $('<div/>').addClass('engine_col span3');
         var input = $('<input/>').attr('type','number')
                 .attr('min',1)
                 .attr('size',3)
                 .addClass('engine_num_input');
         engines_col.append(input);
         var start_button = $('<button/>').addClass("btn btn-mini").text("Start");
-        var action_col = $('<span/>').addClass('action_col span2').append(
+        var action_col = $('<div/>').addClass('action_col span2').append(
             $("<span/>").addClass("item_buttons btn-group").append(
                 start_button
             )
@@ -122,7 +119,7 @@ var IPython = (function (IPython) {
         start_button.click(function (e) {
             var n = that.element.find('.engine_num_input').val();
             if (!/^\d+$/.test(n) && n.length>0) {
-                status_col.html('invalid engine #');
+                status_col.text('invalid engine #');
             } else {
                 var settings = {
                     cache : false,
@@ -133,12 +130,12 @@ var IPython = (function (IPython) {
                         that.update_state(data);
                     },
                     error : function (data, status, xhr) {
-                        status_col.html("error starting cluster");
+                        status_col.text("error starting cluster");
                     }
                 };
-                status_col.html('starting');
+                status_col.text('starting');
                 var url = utils.url_join_encode(
-                    that.baseProjectUrl(),
+                    that.base_url,
                     'clusters',
                     that.data.profile,
                     'start'
@@ -151,11 +148,11 @@ var IPython = (function (IPython) {
 
     ClusterItem.prototype.state_running = function () {
         var that = this;
-        var profile_col = $('<span/>').addClass('profile_col span4').text(this.data.profile);
-        var status_col = $('<span/>').addClass('status_col span3').html('running');
-        var engines_col = $('<span/>').addClass('engines_col span3').html(this.data.n);
+        var profile_col = $('<div/>').addClass('profile_col span4').text(this.data.profile);
+        var status_col = $('<div/>').addClass('status_col span3').text('running');
+        var engines_col = $('<div/>').addClass('engines_col span3').text(this.data.n);
         var stop_button = $('<button/>').addClass("btn btn-mini").text("Stop");
-        var action_col = $('<span/>').addClass('action_col span2').append(
+        var action_col = $('<div/>').addClass('action_col span2').append(
             $("<span/>").addClass("item_buttons btn-group").append(
                 stop_button
             )
@@ -175,12 +172,12 @@ var IPython = (function (IPython) {
                 },
                 error : function (data, status, xhr) {
                     console.log('error',data);
-                    status_col.html("error stopping cluster");
+                    status_col.text("error stopping cluster");
                 }
             };
-            status_col.html('stopping');
+            status_col.text('stopping');
             var url = utils.url_join_encode(
-                that.baseProjectUrl(),
+                that.base_url,
                 'clusters',
                 that.data.profile,
                 'stop'

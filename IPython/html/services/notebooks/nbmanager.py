@@ -20,9 +20,9 @@ Authors:
 import os
 
 from IPython.config.configurable import LoggingConfigurable
-from IPython.nbformat import current
+from IPython.nbformat import current, sign
 from IPython.utils import py3compat
-from IPython.utils.traitlets import Unicode, TraitError
+from IPython.utils.traitlets import Instance, Unicode, TraitError
 
 #-----------------------------------------------------------------------------
 # Classes
@@ -42,6 +42,30 @@ class NotebookManager(LoggingConfigurable):
 
     filename_ext = Unicode(u'.ipynb')
     
+    notary = Instance(sign.NotebookNotary)
+    def _notary_default(self):
+        return sign.NotebookNotary(parent=self)
+    
+    def check_and_sign(self, nb, path, name):
+        """Check for trusted cells, and sign the notebook.
+        
+        Called as a part of saving notebooks.
+        """
+        if self.notary.check_cells(nb):
+            self.notary.sign(nb)
+        else:
+            self.log.warn("Saving untrusted notebook %s/%s", path, name)
+    
+    def mark_trusted_cells(self, nb, path, name):
+        """Mark cells as trusted if the notebook signature matches.
+        
+        Called as a part of loading notebooks.
+        """
+        trusted = self.notary.check_signature(nb)
+        if not trusted:
+            self.log.warn("Notebook %s/%s is not trusted", path, name)
+        self.notary.mark_cells(nb, trusted)
+    
     def path_exists(self, path):
         """Does the API-style path (directory) actually exist?
         
@@ -58,7 +82,24 @@ class NotebookManager(LoggingConfigurable):
             Whether the path does indeed exist.
         """
         raise NotImplementedError
-    
+
+    def is_hidden(self, path):
+        """Does the API style path correspond to a hidden directory or file?
+        
+        Parameters
+        ----------
+        path : string
+            The path to check. This is an API path (`/` separated,
+            relative to base notebook-dir).
+        
+        Returns
+        -------
+        exists : bool
+            Whether the path is hidden.
+        
+        """
+        raise NotImplementedError
+
     def _notebook_dir_changed(self, name, old, new):
         """Do a bit of validation of the notebook dir."""
         if not os.path.isabs(new):
@@ -87,6 +128,26 @@ class NotebookManager(LoggingConfigurable):
             The URL path of the notebooks directory
         """
         return basename
+
+    # TODO: Remove this after we create the contents web service and directories are
+    # no longer listed by the notebook web service.
+    def list_dirs(self, path):
+        """List the directory models for a given API style path."""
+        raise NotImplementedError('must be implemented in a subclass')
+
+    # TODO: Remove this after we create the contents web service and directories are
+    # no longer listed by the notebook web service.
+    def get_dir_model(self, name, path=''):
+        """Get the directory model given a directory name and its API style path.
+        
+        The keys in the model should be:
+        * name
+        * path
+        * last_modified
+        * created
+        * type='directory'
+        """
+        raise NotImplementedError('must be implemented in a subclass')
 
     def list_notebooks(self, path=''):
         """Return a list of notebook dicts without content.

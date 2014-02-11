@@ -69,17 +69,29 @@ var IPython = (function (IPython) {
 
     NotificationArea.prototype.init_notification_widgets = function() {
         var knw = this.new_notification_widget('kernel');
+        var $kernel_ind_icon = $("#kernel_indicator_icon");
+        var $modal_ind_icon = $("#modal_indicator_icon");
+
+        // Command/Edit mode
+        $([IPython.events]).on('edit_mode.Notebook',function () {
+            IPython.save_widget.update_document_title();
+            $modal_ind_icon.attr('class','icon-pencil').attr('title','Edit Mode');
+        });
+
+        $([IPython.events]).on('command_mode.Notebook',function () {
+            IPython.save_widget.update_document_title();
+            $modal_ind_icon.attr('class','').attr('title','Command Mode');
+        });
 
         // Kernel events
         $([IPython.events]).on('status_idle.Kernel',function () {
             IPython.save_widget.update_document_title();
-            knw.set_message('Kernel Idle',200);
-            }
-        );
+            $kernel_ind_icon.attr('class','icon-circle-blank').attr('title','Kernel Idle');
+        });
 
         $([IPython.events]).on('status_busy.Kernel',function () {
             window.document.title='(Busy) '+window.document.title;
-            knw.set_message("Kernel busy");
+            $kernel_ind_icon.attr('class','icon-circle').attr('title','Kernel Busy');
         });
 
         $([IPython.events]).on('status_restarting.Kernel',function () {
@@ -88,7 +100,7 @@ var IPython = (function (IPython) {
         });
 
         $([IPython.events]).on('status_interrupting.Kernel',function () {
-            knw.set_message("Interrupting kernel");
+            knw.set_message("Interrupting kernel", 2000);
         });
 
         $([IPython.events]).on('status_dead.Kernel',function () {
@@ -127,7 +139,7 @@ var IPython = (function (IPython) {
                 return;
             }
             console.log('WebSocket connection failed: ', ws_url)
-            msg = "A WebSocket connection to could not be established." +
+            msg = "A WebSocket connection could not be established." +
                 " You will NOT be able to run code. Check your" +
                 " network connection or notebook server configuration.";
             IPython.dialog.modal({

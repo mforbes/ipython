@@ -21,10 +21,16 @@ import functools
 import json
 import logging
 import os
-import stat
+import re
 import sys
 import traceback
+try:
+    # py3
+    from http.client import responses
+except ImportError:
+    from httplib import responses
 
+from jinja2 import TemplateNotFound
 from tornado import web
 
 try:
@@ -35,23 +41,14 @@ except ImportError:
 from IPython.config import Application
 from IPython.utils.path import filefind
 from IPython.utils.py3compat import string_types
-
-# UF_HIDDEN is a stat flag not defined in the stat module.
-# It is used by BSD to indicate hidden files.
-UF_HIDDEN = getattr(stat, 'UF_HIDDEN', 32768)
+from IPython.html.utils import is_hidden
 
 #-----------------------------------------------------------------------------
 # Top-level handlers
 #-----------------------------------------------------------------------------
+non_alphanum = re.compile(r'[^A-Za-z0-9]')
 
-class RequestHandler(web.RequestHandler):
-    """RequestHandler with default variable setting."""
-
-    def render(*args, **kwargs):
-        kwargs.setdefault('message', '')
-        return web.RequestHandler.render(*args, **kwargs)
-
-class AuthenticatedHandler(RequestHandler):
+class AuthenticatedHandler(web.RequestHandler):
     """A RequestHandler with an authenticated user."""
 
     def clear_login_cookie(self):
@@ -71,9 +68,9 @@ class AuthenticatedHandler(RequestHandler):
 
     @property
     def cookie_name(self):
-        default_cookie_name = 'username-{host}'.format(
-            host=self.request.host,
-        ).replace(':', '-')
+        default_cookie_name = non_alphanum.sub('-', 'username-{}'.format(
+            self.request.host
+        ))
         return self.settings.get('cookie_name', default_cookie_name)
     
     @property
@@ -118,11 +115,6 @@ class IPythonHandler(AuthenticatedHandler):
         else:
             return app_log
     
-    @property
-    def use_less(self):
-        """Use less instead of css in templates"""
-        return self.settings.get('use_less', False)
-    
     #---------------------------------------------------------------
     # URLs
     #---------------------------------------------------------------
@@ -141,8 +133,8 @@ class IPythonHandler(AuthenticatedHandler):
         return self.settings.get('mathjax_url', '')
     
     @property
-    def base_project_url(self):
-        return self.settings.get('base_project_url', '/')
+    def base_url(self):
+        return self.settings.get('base_url', '/')
     
     @property
     def base_kernel_url(self):
@@ -188,11 +180,10 @@ class IPythonHandler(AuthenticatedHandler):
     @property
     def template_namespace(self):
         return dict(
-            base_project_url=self.base_project_url,
+            base_url=self.base_url,
             base_kernel_url=self.base_kernel_url,
             logged_in=self.logged_in,
             login_available=self.login_available,
-            use_less=self.use_less,
             static_url=self.static_url,
         )
     
@@ -209,6 +200,45 @@ class IPythonHandler(AuthenticatedHandler):
             self.log.error("Couldn't parse JSON", exc_info=True)
             raise web.HTTPError(400, u'Invalid JSON in body of request')
         return model
+
+    def get_error_html(self, status_code, **kwargs):
+        """render custom error pages"""
+        exception = kwargs.get('exception')
+        message = ''
+        status_message = responses.get(status_code, 'Unknown HTTP Error')
+        if exception:
+            # get the custom message, if defined
+            try:
+                message = exception.log_message % exception.args
+            except Exception:
+                pass
+            
+            # construct the custom reason, if defined
+            reason = getattr(exception, 'reason', '')
+            if reason:
+                status_message = reason
+        
+        # build template namespace
+        ns = dict(
+            status_code=status_code,
+            status_message=status_message,
+            message=message,
+            exception=exception,
+        )
+        
+        # render the template
+        try:
+            html = self.render_template('%s.html' % status_code, **ns)
+        except TemplateNotFound:
+            self.log.debug("No template for %d", status_code)
+            html = self.render_template('error.html', **ns)
+        return html
+
+
+class Template404(IPythonHandler):
+    """Render our 404 template"""
+    def prepare(self):
+        raise web.HTTPError(404)
 
 
 class AuthenticatedFileHandler(IPythonHandler, web.StaticFileHandler):
@@ -235,28 +265,9 @@ class AuthenticatedFileHandler(IPythonHandler, web.StaticFileHandler):
         """
         abs_path = super(AuthenticatedFileHandler, self).validate_absolute_path(root, absolute_path)
         abs_root = os.path.abspath(root)
-        self.forbid_hidden(abs_root, abs_path)
+        if is_hidden(abs_path, abs_root):
+            raise web.HTTPError(404)
         return abs_path
-    
-    def forbid_hidden(self, absolute_root, absolute_path):
-        """Raise 403 if a file is hidden or contained in a hidden directory.
-        
-        Hidden is determined by either name starting with '.'
-        or the UF_HIDDEN flag as reported by stat
-        """
-        inside_root = absolute_path[len(absolute_root):]
-        if any(part.startswith('.') for part in inside_root.split(os.sep)):
-            raise web.HTTPError(403)
-        
-        # check UF_HIDDEN on any location up to root
-        path = absolute_path
-        while path and path.startswith(absolute_root) and path != absolute_root:
-            st = os.stat(path)
-            if getattr(st, 'st_flags', 0) & UF_HIDDEN:
-                raise web.HTTPError(403)
-            path = os.path.dirname(path)
-        
-        return absolute_path
 
 
 def json_errors(method):

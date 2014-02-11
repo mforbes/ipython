@@ -14,12 +14,24 @@ This module does not import anything from matplotlib.
 #-----------------------------------------------------------------------------
 
 from IPython.config.configurable import SingletonConfigurable
-from IPython.utils.traitlets import Dict, Instance, CaselessStrEnum, Bool
+from IPython.utils.traitlets import (
+    Dict, Instance, CaselessStrEnum, Set, Bool, Int, TraitError, Unicode
+)
 from IPython.utils.warn import warn
 
 #-----------------------------------------------------------------------------
 # Configurable for inline backend options
 #-----------------------------------------------------------------------------
+
+def pil_available():
+    """Test if PIL/Pillow is available"""
+    out = False
+    try:
+        from PIL import Image
+        out = True
+    except:
+        pass
+    return out
 
 # inherit from InlineBackendConfig for deprecation purposes
 class InlineBackendConfig(SingletonConfigurable):
@@ -53,15 +65,33 @@ class InlineBackend(InlineBackendConfig):
         inline backend."""
     )
 
-    figure_format = CaselessStrEnum(['svg', 'png', 'retina'], default_value='png', config=True,
-        help="The image format for figures with the inline backend.")
+    figure_formats = Set({'png'}, config=True,
+                          help="""A set of figure formats to enable: 'png', 
+                          'retina', 'jpeg', 'svg', 'pdf'.""")
 
-    def _figure_format_changed(self, name, old, new):
-        from IPython.core.pylabtools import select_figure_format
+    def _figure_formats_changed(self, name, old, new):
+        from IPython.core.pylabtools import select_figure_formats
+        if 'jpg' in new or 'jpeg' in new:
+            if not pil_available():
+                raise TraitError("Requires PIL/Pillow for JPG figures")
         if self.shell is None:
             return
         else:
-            select_figure_format(self.shell, new)
+            select_figure_formats(self.shell, new)
+
+    figure_format = Unicode(config=True, help="""The figure format to enable (deprecated
+                                         use `figure_formats` instead)""")
+
+    def _figure_format_changed(self, name, old, new):
+        if new:
+            self.figure_formats = {new}
+
+    quality = Int(default_value=90, config=True,
+                  help="Quality of compression [10-100], currently for lossy JPEG only.")
+
+    def _quality_changed(self, name, old, new):
+        if new < 10 or new > 100:
+            raise TraitError("figure JPEG quality must be in [10-100] range.")
     
     close_figures = Bool(True, config=True,
         help="""Close all figures at the end of each cell.

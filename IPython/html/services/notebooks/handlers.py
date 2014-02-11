@@ -47,7 +47,7 @@ class NotebookHandler(IPythonHandler):
             The URL path of the notebook.
         """
         return url_escape(url_path_join(
-            self.base_project_url, 'api', 'notebooks', path, name
+            self.base_url, 'api', 'notebooks', path, name
         ))
 
     def _finish_model(self, model, location=True):
@@ -69,8 +69,18 @@ class NotebookHandler(IPythonHandler):
         nbm = self.notebook_manager
         # Check to see if a notebook name was given
         if name is None:
-            # List notebooks in 'path'
-            notebooks = nbm.list_notebooks(path)
+            # TODO: Remove this after we create the contents web service and directories are
+            # no longer listed by the notebook web service. This should only handle notebooks
+            # and not directories.
+            dirs = nbm.list_dirs(path)
+            notebooks = []
+            index = []
+            for nb in nbm.list_notebooks(path):
+                if nb['name'].lower() == 'index.ipynb':
+                    index.append(nb)
+                else:
+                    notebooks.append(nb)
+            notebooks = index + dirs + notebooks
             self.finish(json.dumps(notebooks, default=date_default))
             return
         # get and return notebook representation
@@ -232,7 +242,7 @@ class NotebookCheckpointsHandler(IPythonHandler):
         nbm = self.notebook_manager
         checkpoint = nbm.create_checkpoint(name, path)
         data = json.dumps(checkpoint, default=date_default)
-        location = url_path_join(self.base_project_url, 'api/notebooks',
+        location = url_path_join(self.base_url, 'api/notebooks',
             path, name, 'checkpoints', checkpoint['id'])
         self.set_header('Location', url_escape(location))
         self.set_status(201)

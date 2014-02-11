@@ -135,6 +135,8 @@ class IPythonWidget(FrontendWidget):
         else:
             self.set_default_style()
 
+        self._guiref_loaded = False
+
     #---------------------------------------------------------------------------
     # 'BaseFrontendMixin' abstract interface
     #---------------------------------------------------------------------------
@@ -173,11 +175,15 @@ class IPythonWidget(FrontendWidget):
         msg_id = msg['parent_header'].get('msg_id')
         info = self._request_info['execute'].get(msg_id)
         if info and info.kind == 'prompt':
-           number = msg['content']['execution_count'] + 1
-           self._show_interpreter_prompt(number)
-           self._request_info['execute'].pop(msg_id)
+            content = msg['content']
+            if content['status'] == 'aborted':
+                self._show_interpreter_prompt()
+            else:
+                number = content['execution_count'] + 1
+                self._show_interpreter_prompt(number)
+            self._request_info['execute'].pop(msg_id)
         else:
-           super(IPythonWidget, self)._handle_execute_reply(msg)
+            super(IPythonWidget, self)._handle_execute_reply(msg)
 
     def _handle_history_reply(self, msg):
         """ Implemented to handle history tail replies, which are only supported
@@ -258,10 +264,21 @@ class IPythonWidget(FrontendWidget):
             # This newline seems to be needed for text and html output.
             self._append_plain_text(u'\n', True)
 
+    def _handle_kernel_info_reply(self, rep):
+        """ Handle kernel info replies.
+        """
+        if not self._guiref_loaded:
+            if rep['content'].get('language') == 'python':
+                self._load_guiref_magic()
+            self._guiref_loaded = True
+
     def _started_channels(self):
         """Reimplemented to make a history request and load %guiref."""
         super(IPythonWidget, self)._started_channels()
-        self._load_guiref_magic()
+
+        # The reply will trigger %guiref load provided language=='python'
+        self.kernel_client.kernel_info()
+
         self.kernel_client.shell_channel.history(hist_access_type='tail',
                                                   n=1000)
     

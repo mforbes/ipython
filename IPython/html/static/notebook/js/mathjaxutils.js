@@ -38,40 +38,40 @@ IPython.mathjaxutils = (function (IPython) {
             // Don't have MathJax, but should. Show dialog.
             var message = $('<div/>')
                 .append(
-                    $("<p/></p>").addClass('dialog').html(
+                    $("<p/></p>").addClass('dialog').text(
                         "Math/LaTeX rendering will be disabled."
                     )
                 ).append(
-                    $("<p></p>").addClass('dialog').html(
+                    $("<p></p>").addClass('dialog').text(
                         "If you have administrative access to the notebook server and" +
                         " a working internet connection, you can install a local copy" +
                         " of MathJax for offline use with the following command on the server" +
                         " at a Python or IPython prompt:"
                     )
                 ).append(
-                    $("<pre></pre>").addClass('dialog').html(
+                    $("<pre></pre>").addClass('dialog').text(
                         ">>> from IPython.external import mathjax; mathjax.install_mathjax()"
                     )
                 ).append(
-                    $("<p></p>").addClass('dialog').html(
+                    $("<p></p>").addClass('dialog').text(
                         "This will try to install MathJax into the IPython source directory."
                     )
                 ).append(
-                    $("<p></p>").addClass('dialog').html(
+                    $("<p></p>").addClass('dialog').text(
                         "If IPython is installed to a location that requires" +
                         " administrative privileges to write, you will need to make this call as" +
                         " an administrator, via 'sudo'."
                     )
                 ).append(
-                    $("<p></p>").addClass('dialog').html(
+                    $("<p></p>").addClass('dialog').text(
                         "When you start the notebook server, you can instruct it to disable MathJax support altogether:"
                     )
                 ).append(
-                    $("<pre></pre>").addClass('dialog').html(
+                    $("<pre></pre>").addClass('dialog').text(
                         "$ ipython notebook --no-mathjax"
                     )
                 ).append(
-                    $("<p></p>").addClass('dialog').html(
+                    $("<p></p>").addClass('dialog').text(
                         "which will prevent this dialog from appearing."
                     )
                 );
@@ -106,12 +106,11 @@ IPython.mathjaxutils = (function (IPython) {
     //    math, then push the math string onto the storage array.
     //  The preProcess function is called on all blocks if it has been passed in
     var process_math = function (i, j, pre_process, math, blocks) {
-        var hub = MathJax.Hub;
         var block = blocks.slice(i, j + 1).join("").replace(/&/g, "&amp;") // use HTML entity for &
         .replace(/</g, "&lt;") // use HTML entity for <
         .replace(/>/g, "&gt;") // use HTML entity for >
         ;
-        if (hub.Browser.isMSIE) {
+        if (IPython.utils.browser === 'msie') {
             block = block.replace(/(%[^\n]*)\n/g, "$1<br/>\n");
         }
         while (j > i) {
@@ -133,10 +132,6 @@ IPython.mathjaxutils = (function (IPython) {
     //    (which will be a paragraph).
     //
     var remove_math = function (text) {
-        if (!window.MathJax) {
-            return [text, null];
-        }
-
         var math = []; // stores math strings for later
         var start;
         var end;
@@ -241,9 +236,6 @@ IPython.mathjaxutils = (function (IPython) {
     //    and clear the math array (no need to keep it around).
     //
     var replace_math = function (text, math) {
-        if (!window.MathJax) {
-            return text;
-        }
         text = text.replace(/@@(\d+)@@/g, function (match, n) {
             return math[n];
         });

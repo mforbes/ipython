@@ -74,7 +74,11 @@ def safe_unicode(e):
 if sys.version_info[0] >= 3:
     PY3 = True
     
-    input = input
+    # keep reference to builtin_mod because the kernel overrides that value
+    # to forward requests to a frontend.
+    def input(prompt=''):
+        return builtin_mod.input(prompt)
+    
     builtin_mod_name = "builtins"
     import builtins as builtin_mod
     
@@ -131,7 +135,11 @@ if sys.version_info[0] >= 3:
 else:
     PY3 = False
     
-    input = raw_input
+    # keep reference to builtin_mod because the kernel overrides that value
+    # to forward requests to a frontend.
+    def input(prompt=''):
+        return builtin_mod.raw_input(prompt)
+    
     builtin_mod_name = "__builtin__"
     import __builtin__ as builtin_mod
     
@@ -181,9 +189,6 @@ else:
     def MethodType(func, instance):
         return types.MethodType(func, instance, type(instance))
     
-    # don't override system execfile on 2.x:
-    execfile = execfile
-    
     def doctest_refactor_print(func_or_str):
         return func_or_str
 
@@ -217,6 +222,21 @@ else:
             else:
                 filename = fname
             builtin_mod.execfile(filename, *where)
+
+
+def annotate(**kwargs):
+    """Python 3 compatible function annotation for Python 2."""
+    if not kwargs:
+        raise ValueError('annotations must be provided as keyword arguments')
+    def dec(f):
+        if hasattr(f, '__annotations__'):
+            for k, v in kwargs.items():
+                f.__annotations__[k] = v
+        else:
+            f.__annotations__ = kwargs
+        return f
+    return dec
+
 
 # Parts below taken from six:
 # Copyright (c) 2010-2013 Benjamin Peterson

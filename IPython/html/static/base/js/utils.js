@@ -417,15 +417,29 @@ IPython.utils = (function (IPython) {
                 url = url + arguments[i];
             }
         }
+        url = url.replace(/\/\/+/, '/');
         return url;
     };
     
+    var parse_url = function (url) {
+        // an `a` element with an href allows attr-access to the parsed segments of a URL
+        // a = parse_url("http://localhost:8888/path/name#hash")
+        // a.protocol = "http:"
+        // a.host     = "localhost:8888"
+        // a.hostname = "localhost"
+        // a.port     = 8888
+        // a.pathname = "/path/name"
+        // a.hash     = "#hash"
+        var a = document.createElement("a");
+        a.href = url;
+        return a;
+    };
     
     var encode_uri_components = function (uri) {
         // encode just the components of a multi-segment uri,
         // leaving '/' separators
         return uri.split('/').map(encodeURIComponent).join('/');
-    }
+    };
     
     var url_join_encode = function () {
         // join a sequence of url components with '/',
@@ -443,17 +457,63 @@ IPython.utils = (function (IPython) {
         } else {
             return [filename, ''];
         }
-    }
+    };
+
+
+    var get_body_data = function(key) {
+        // get a url-encoded item from body.data and decode it
+        // we should never have any encoded URLs anywhere else in code
+        // until we are building an actual request
+        return decodeURIComponent($('body').data(key));
+    };
 
 
     // http://stackoverflow.com/questions/2400935/browser-detection-in-javascript
     var browser = (function() {
+        if (typeof navigator === 'undefined') {
+            // navigator undefined in node
+            return 'None';
+        }
         var N= navigator.appName, ua= navigator.userAgent, tem;
         var M= ua.match(/(opera|chrome|safari|firefox|msie)\/?\s*(\.?\d+(\.\d+)*)/i);
         if (M && (tem= ua.match(/version\/([\.\d]+)/i))!= null) M[2]= tem[1];
         M= M? [M[1], M[2]]: [N, navigator.appVersion,'-?'];
         return M;
     })();
+
+    // http://stackoverflow.com/questions/11219582/how-to-detect-my-browser-version-and-operating-system-using-javascript
+    var platform = (function () {
+        if (typeof navigator === 'undefined') {
+            // navigator undefined in node
+            return 'None';
+        }
+        var OSName="None";
+        if (navigator.appVersion.indexOf("Win")!=-1) OSName="Windows";
+        if (navigator.appVersion.indexOf("Mac")!=-1) OSName="MacOS";
+        if (navigator.appVersion.indexOf("X11")!=-1) OSName="UNIX";
+        if (navigator.appVersion.indexOf("Linux")!=-1) OSName="Linux";
+        return OSName
+    })();
+
+    var is_or_has = function (a, b) {
+        // Is b a child of a or a itself?
+        return a.has(b).length !==0 || a.is(b);
+    }
+
+    var is_focused = function (e) {
+        // Is element e, or one of its children focused?
+        e = $(e);
+        var target = $(document.activeElement);
+        if (target.length > 0) {
+            if (is_or_has(e, target)) {
+                return true;
+            } else {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
 
 
     return {
@@ -470,12 +530,17 @@ IPython.utils = (function (IPython) {
         fixCarriageReturn : fixCarriageReturn,
         autoLinkUrls : autoLinkUrls,
         points_to_pixels : points_to_pixels,
+        get_body_data : get_body_data,
+        parse_url : parse_url,
         url_path_join : url_path_join,
         url_join_encode : url_join_encode,
         encode_uri_components : encode_uri_components,
         splitext : splitext,
         always_new : always_new,
-        browser : browser
+        browser : browser,
+        platform: platform,
+        is_or_has : is_or_has,
+        is_focused : is_focused
     };
 
 }(IPython));

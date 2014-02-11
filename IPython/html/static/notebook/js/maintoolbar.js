@@ -41,6 +41,8 @@ var IPython = (function (IPython) {
                     icon : 'icon-plus-sign',
                     callback : function () {
                         IPython.notebook.insert_cell_below('code');
+                        IPython.notebook.select_next();
+                        IPython.notebook.focus_cell();
                         }
                 }
             ],'insert_above_below');
@@ -98,8 +100,9 @@ var IPython = (function (IPython) {
                     label : 'Run Cell',
                     icon : 'icon-play',
                     callback : function () {
-                    IPython.notebook.execute_selected_cell();
-                        }
+                        // emulate default shift-enter behavior
+                        IPython.notebook.execute_cell_and_select_below();
+                    }
                 },
                 {
                     id : 'interrupt_b',
@@ -107,6 +110,14 @@ var IPython = (function (IPython) {
                     icon : 'icon-stop',
                     callback : function () {
                         IPython.notebook.session.interrupt_kernel();
+                        }
+                },
+                {
+                    id : 'repeat_b',
+                    label : 'Restart Kernel',
+                    icon : 'icon-repeat',
+                    callback : function () {
+                        IPython.notebook.restart_kernel();
                         }
                 }
             ],'run_int');

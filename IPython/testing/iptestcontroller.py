@@ -159,6 +159,18 @@ class PyTestController(TestController):
         self.cmd[2] = self.pycmd
         super(PyTestController, self).launch()
 
+js_prefix = 'js/'
+
+def get_js_test_dir():
+    import IPython.html.tests as t
+    return os.path.join(os.path.dirname(t.__file__), '')
+
+def all_js_groups():
+    import glob
+    test_dir = get_js_test_dir()
+    all_subdirs = glob.glob(test_dir + '*/')
+    return [js_prefix+os.path.relpath(x, test_dir) for x in all_subdirs if os.path.relpath(x, test_dir) != '__pycache__']
+
 class JSController(TestController):
     """Run CasperJS tests """
     def __init__(self, section):
@@ -166,21 +178,23 @@ class JSController(TestController):
         TestController.__init__(self)
         self.section = section
 
-        self.ipydir = TemporaryDirectory()
-        self.dirs.append(self.ipydir)
-        self.env['IPYTHONDIR'] = self.ipydir.name
 
     def launch(self):
+        self.ipydir = TemporaryDirectory()
+        self.nbdir = TemporaryDirectory()
+        print("Running %s tests in directory: %r" % (self.section, self.nbdir.name))
+        os.makedirs(os.path.join(self.nbdir.name, os.path.join(u'sub ∂ir1', u'sub ∂ir 1a')))
+        os.makedirs(os.path.join(self.nbdir.name, os.path.join(u'sub ∂ir2', u'sub ∂ir 1b')))
+        self.dirs.append(self.ipydir)
+        self.dirs.append(self.nbdir)
+        
         # start the ipython notebook, so we get the port number
         self._init_server()
-
-        import IPython.html.tests as t
-        test_dir = os.path.join(os.path.dirname(t.__file__), 'casperjs')
-        includes = '--includes=' + os.path.join(test_dir,'util.js')
-        test_cases = os.path.join(test_dir, 'test_cases')
+        js_test_dir = get_js_test_dir()
+        includes = '--includes=' + os.path.join(js_test_dir,'util.js')
+        test_cases = os.path.join(js_test_dir, self.section[len(js_prefix):])
         port = '--port=' + str(self.server_port)
         self.cmd = ['casperjs', 'test', port, includes, test_cases]
-
         super(JSController, self).launch()
 
     @property
@@ -190,7 +204,7 @@ class JSController(TestController):
     def _init_server(self):
         "Start the notebook server in a separate process"
         self.queue = q = Queue()
-        self.server = Process(target=run_webapp, args=(q, self.ipydir.name))
+        self.server = Process(target=run_webapp, args=(q, self.ipydir.name, self.nbdir.name))
         self.server.start()
         self.server_port = q.get()
 
@@ -199,20 +213,17 @@ class JSController(TestController):
         self.server.join()
         TestController.cleanup(self)
 
-js_test_group_names = {'js'}
-
-def run_webapp(q, nbdir, loglevel=0):
+def run_webapp(q, ipydir, nbdir, loglevel=0):
     """start the IPython Notebook, and pass port back to the queue"""
     import os
     import IPython.html.notebookapp as nbapp
     import sys
     sys.stderr = open(os.devnull, 'w')
-    os.environ["IPYTHONDIR"] = nbdir
     server = nbapp.NotebookApp()
     args = ['--no-browser']
-    args.append('--notebook-dir='+nbdir)
-    args.append('--profile-dir='+nbdir)
-    args.append('--log-level='+str(loglevel))
+    args.extend(['--ipython-dir', ipydir])
+    args.extend(['--notebook-dir', nbdir])
+    args.extend(['--log-level', str(loglevel)])
     server.initialize(args)
     # communicate the port number to the parent process
     q.put(server.port)
@@ -225,11 +236,14 @@ def prepare_controllers(options):
 
     if testgroups:
         py_testgroups = [g for g in testgroups if (g in py_test_group_names) \
-                                                or g.startswith('IPython')]
-        js_testgroups = [g for g in testgroups if g in js_test_group_names]
+                                                or g.startswith('IPython.')]
+        if 'js' in testgroups:
+            js_testgroups = all_js_groups()
+        else:
+            js_testgroups = [g for g in testgroups if g not in py_testgroups]
     else:
         py_testgroups = py_test_group_names
-        js_testgroups = js_test_group_names
+        js_testgroups = all_js_groups()
         if not options.all:
             test_sections['parallel'].enabled = False
 
@@ -485,6 +499,14 @@ def default_options():
     return options
 
 def main():
+    # iptest doesn't work correctly if the working directory is the
+    # root of the IPython source tree. Tell the user to avoid
+    # frustration.
+    if os.path.exists(os.path.join(os.getcwd(),
+                                   'IPython', 'testing', '__main__.py')):
+        print("Don't run iptest from the IPython source directory",
+              file=sys.stderr)
+        sys.exit(1)
     # Arguments after -- should be passed through to nose. Argparse treats
     # everything after -- as regular positional arguments, so we separate them
     # first.

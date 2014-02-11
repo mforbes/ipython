@@ -348,7 +348,11 @@ class IPClusterEngines(BaseParallelApplication):
         # Some EngineSetLaunchers ignore `n` and use their own engine count, such as SSH:
         n = getattr(self.engine_launcher, 'engine_count', self.n)
         self.log.info("Starting %s Engines with %s", n, self.engine_launcher_class)
-        self.engine_launcher.start(self.n)
+        try:
+            self.engine_launcher.start(self.n)
+        except:
+            self.log.exception("Engine start failed")
+            raise
         self.engine_launcher.on_stop(self.engines_stopped_early)
         if self.early_shutdown:
             ioloop.DelayedCallback(self.engines_started_ok, self.early_shutdown*1000, self.loop).start()
@@ -401,10 +405,8 @@ class IPClusterEngines(BaseParallelApplication):
         if self.clean_logs:
             log_dir = self.profile_dir.log_dir
             for f in os.listdir(log_dir):
-                if re.match(r'ip(engine|controller)z-\d+\.(log|err|out)',f):
+                if re.match(r'ip(engine|controller)-.+\.(log|err|out)',f):
                     os.remove(os.path.join(log_dir, f))
-        # This will remove old log files for ipcluster itself
-        # super(IPBaseParallelApplication, self).start_logging()
 
     def start(self):
         """Start the app for the engines subcommand."""
@@ -519,7 +521,11 @@ class IPClusterStart(IPClusterEngines):
     def start_controller(self):
         self.log.info("Starting Controller with %s", self.controller_launcher_class)
         self.controller_launcher.on_stop(self.stop_launchers)
-        self.controller_launcher.start()
+        try:
+            self.controller_launcher.start()
+        except:
+            self.log.exception("Controller start failed")
+            raise
 
     def stop_controller(self):
         # self.log.info("In stop_controller")

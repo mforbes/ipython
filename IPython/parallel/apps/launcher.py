@@ -76,13 +76,17 @@ WINDOWS = os.name == 'nt'
 # Paths to the kernel apps
 #-----------------------------------------------------------------------------
 
-cmd = "from IPython.parallel.apps.%s import launch_new_instance; launch_new_instance()"
+ipcluster_cmd_argv = [sys.executable, "-m", "IPython.parallel.cluster"]
 
-ipcluster_cmd_argv = [sys.executable, "-c", cmd % "ipclusterapp"]
+ipengine_cmd_argv = [sys.executable, "-m", "IPython.parallel.engine"]
 
-ipengine_cmd_argv = [sys.executable, "-c", cmd % "ipengineapp"]
+ipcontroller_cmd_argv = [sys.executable, "-m", "IPython.parallel.controller"]
 
-ipcontroller_cmd_argv = [sys.executable, "-c", cmd % "ipcontrollerapp"]
+if WINDOWS and sys.version_info < (3,):
+    # `python -m package` doesn't work on Windows Python 2,
+    # but `python -m module` does.
+    ipengine_cmd_argv = [sys.executable, "-m", "IPython.parallel.apps.ipengineapp"]
+    ipcontroller_cmd_argv = [sys.executable, "-m", "IPython.parallel.apps.ipcontrollerapp"]
 
 #-----------------------------------------------------------------------------
 # Base launchers and errors
@@ -596,6 +600,11 @@ class SSHLauncher(LocalProcessLauncher):
                 time.sleep(1)
             else:
                 break
+        remote_dir = os.path.dirname(remote)
+        self.log.info("ensuring remote %s:%s/ exists", self.location, remote_dir)
+        check_output(self.ssh_cmd + self.ssh_args + \
+            [self.location, 'mkdir', '-p', '--', remote_dir]
+        )
         self.log.info("sending %s to %s", local, remote)
         check_output(self.scp_cmd + [local, remote])
     
@@ -619,6 +628,9 @@ class SSHLauncher(LocalProcessLauncher):
                 time.sleep(1)
             elif check == u'yes':
                 break
+        local_dir = os.path.dirname(local)
+        if not os.path.exists(local_dir):
+            os.makedirs(local_dir, 775)
         check_output(self.scp_cmd + [full_remote, local])
     
     def fetch_files(self):

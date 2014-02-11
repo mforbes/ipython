@@ -14,7 +14,7 @@ var IPython = (function (IPython) {
     
     var utils = IPython.utils;
 
-    var NotebookList = function (selector) {
+    var NotebookList = function (selector, options) {
         this.selector = selector;
         if (this.selector !== undefined) {
             this.element = $(selector);
@@ -23,16 +23,10 @@ var IPython = (function (IPython) {
         }
         this.notebooks_list = [];
         this.sessions = {};
+        this.base_url = options.base_url || utils.get_body_data("baseUrl");
+        this.notebook_path = options.notebook_path || utils.get_body_data("notebookPath");
     };
 
-    NotebookList.prototype.baseProjectUrl = function () {
-        return $('body').data('baseProjectUrl');
-    };
-
-    NotebookList.prototype.notebookPath = function() {
-        return $('body').data('notebookPath');
-    };
-    
     NotebookList.prototype.style = function () {
         $('#notebook_toolbar').addClass('list_toolbar');
         $('#drag_info').addClass('toolbar_info');
@@ -70,11 +64,10 @@ var IPython = (function (IPython) {
             var reader = new FileReader();
             reader.readAsText(f);
             var name_and_ext = utils.splitext(f.name);
-            var nbname = name_and_ext[0];
             var file_ext = name_and_ext[1];
             if (file_ext === '.ipynb') {
                 var item = that.new_notebook_item(0);
-                that.add_name_input(nbname, item);
+                that.add_name_input(f.name, item);
                 // Store the notebook item in the reader so we can use it later
                 // to know which item it belongs to.
                 $(reader).data('item', item);
@@ -92,6 +85,11 @@ var IPython = (function (IPython) {
                 });
             }
         }
+        // Replace the file input form wth a clone of itself. This is required to
+        // reset the form. Otherwise, if you upload a file, delete it and try to 
+        // upload it again, the changed event won't fire.
+        var form = $('input.fileinput');
+        form.replaceWith(form.clone(true));
         return false;
     };
 
@@ -108,7 +106,7 @@ var IPython = (function (IPython) {
             dataType : "json",
             success : $.proxy(that.sessions_loaded, this)
         };
-        var url = this.baseProjectUrl() + 'api/sessions';
+        var url = utils.url_join_encode(this.base_url, 'api/sessions');
         $.ajax(url,settings);
     };
 
@@ -148,10 +146,10 @@ var IPython = (function (IPython) {
         };
 
         var url = utils.url_join_encode(
-                this.baseProjectUrl(),
+                this.base_url,
                 'api',
                 'notebooks',
-                this.notebookPath()
+                this.notebook_path
         );
         $.ajax(url, settings);
     };
@@ -162,26 +160,37 @@ var IPython = (function (IPython) {
         if (param !== undefined && param.msg) {
             message = param.msg;
         }
+        var item = null;
         var len = data.length;
         this.clear_list();
         if (len === 0) {
-            $(this.new_notebook_item(0))
-                .append(
-                    $('<div style="margin:auto;text-align:center;color:grey"/>')
-                    .text(message)
-                );
+            item = this.new_notebook_item(0);
+            var span12 = item.children().first();
+            span12.empty();
+            span12.append($('<div style="margin:auto;text-align:center;color:grey"/>').text(message));
+        }
+        var path = this.notebook_path;
+        var offset = 0;
+        if (path !== '') {
+            item = this.new_notebook_item(0);
+            this.add_dir(path, '..', item);
+            offset = 1;
         }
         for (var i=0; i<len; i++) {
-            var name = data[i].name;
-            var path = this.notebookPath();
-            var nbname = utils.splitext(name)[0];
-            var item = this.new_notebook_item(i);
-            this.add_link(path, nbname, item);
-            name = utils.url_path_join(path, name);
-            if(this.sessions[name] === undefined){
-                this.add_delete_button(item);
+            if (data[i].type === 'directory') {
+                var name = data[i].name;
+                item = this.new_notebook_item(i+offset);
+                this.add_dir(path, name, item);
             } else {
-                this.add_shutdown_button(item,this.sessions[name]);
+                var name = data[i].name;
+                item = this.new_notebook_item(i+offset);
+                this.add_link(path, name, item);
+                name = utils.url_path_join(path, name);
+                if(this.sessions[name] === undefined){
+                    this.add_delete_button(item);
+                } else {
+                    this.add_shutdown_button(item,this.sessions[name]);
+                }
             }
         }
     };
@@ -192,6 +201,8 @@ var IPython = (function (IPython) {
         // item.addClass('list_item ui-widget ui-widget-content ui-helper-clearfix');
         // item.css('border-top-style','none');
         item.append($("<div/>").addClass("span12").append(
+            $('<i/>').addClass('item_icon')
+        ).append(
             $("<a/>").addClass("item_link").append(
                 $("<span/>").addClass("item_name")
             )
@@ -208,17 +219,35 @@ var IPython = (function (IPython) {
     };
 
 
+    NotebookList.prototype.add_dir = function (path, name, item) {
+        item.data('name', name);
+        item.data('path', path);
+        item.find(".item_name").text(name);
+        item.find(".item_icon").addClass('icon-folder-open');
+        item.find("a.item_link")
+            .attr('href',
+                utils.url_join_encode(
+                    this.base_url,
+                    "tree",
+                    path,
+                    name
+                )
+            );
+    };
+
+
     NotebookList.prototype.add_link = function (path, nbname, item) {
         item.data('nbname', nbname);
         item.data('path', path);
         item.find(".item_name").text(nbname);
+        item.find(".item_icon").addClass('icon-book');
         item.find("a.item_link")
             .attr('href',
                 utils.url_join_encode(
-                    this.baseProjectUrl(),
+                    this.base_url,
                     "notebooks",
                     path,
-                    nbname + ".ipynb"
+                    nbname
                 )
             ).attr('target','_blank');
     };
@@ -226,10 +255,11 @@ var IPython = (function (IPython) {
 
     NotebookList.prototype.add_name_input = function (nbname, item) {
         item.data('nbname', nbname);
+        item.find(".item_icon").addClass('icon-book');
         item.find(".item_name").empty().append(
             $('<input/>')
             .addClass("nbname_input")
-            .attr('value', nbname)
+            .attr('value', utils.splitext(nbname)[0])
             .attr('size', '30')
             .attr('type', 'text')
         );
@@ -243,7 +273,7 @@ var IPython = (function (IPython) {
 
     NotebookList.prototype.add_shutdown_button = function (item, session) {
         var that = this;
-        var shutdown_button = $("<button/>").text("Shutdown").addClass("btn btn-mini").
+        var shutdown_button = $("<button/>").text("Shutdown").addClass("btn btn-mini btn-danger").
             click(function (e) {
                 var settings = {
                     processData : false,
@@ -255,7 +285,7 @@ var IPython = (function (IPython) {
                     }
                 };
                 var url = utils.url_join_encode(
-                    that.baseProjectUrl(),
+                    that.base_url,
                     'api/sessions',
                     session
                 );
@@ -263,7 +293,7 @@ var IPython = (function (IPython) {
                 return false;
             });
         // var new_buttons = item.find('a'); // shutdown_button;
-        item.find(".item_buttons").html("").append(shutdown_button);
+        item.find(".item_buttons").text("").append(shutdown_button);
     };
 
     NotebookList.prototype.add_delete_button = function (item) {
@@ -295,10 +325,10 @@ var IPython = (function (IPython) {
                                     }
                                 };
                                 var url = utils.url_join_encode(
-                                    notebooklist.baseProjectUrl(),
+                                    notebooklist.base_url,
                                     'api/notebooks',
-                                    notebooklist.notebookPath(),
-                                    nbname + '.ipynb'
+                                    notebooklist.notebook_path,
+                                    nbname
                                 );
                                 $.ajax(url, settings);
                             }
@@ -308,7 +338,7 @@ var IPython = (function (IPython) {
                 });
                 return false;
             });
-        item.find(".item_buttons").html("").append(delete_button);
+        item.find(".item_buttons").text("").append(delete_button);
     };
 
 
@@ -318,6 +348,10 @@ var IPython = (function (IPython) {
             .addClass('btn btn-primary btn-mini upload_button')
             .click(function (e) {
                 var nbname = item.find('.item_name > input').val();
+                if (nbname.slice(nbname.length-6, nbname.length) != ".ipynb") {
+                    nbname = nbname + ".ipynb";
+                }
+                var path = that.notebook_path;
                 var nbdata = item.data('nbdata');
                 var content_type = 'application/json';
                 var model = {
@@ -331,7 +365,7 @@ var IPython = (function (IPython) {
                     data : JSON.stringify(model),
                     headers : {'Content-Type': content_type},
                     success : function (data, status, xhr) {
-                        that.add_link(data, nbname, item);
+                        that.add_link(path, nbname, item);
                         that.add_delete_button(item);
                     },
                     error : function (data, status, xhr) {
@@ -340,10 +374,10 @@ var IPython = (function (IPython) {
                 };
 
                 var url = utils.url_join_encode(
-                    that.baseProjectUrl(),
+                    that.base_url,
                     'api/notebooks',
-                    that.notebookPath(),
-                    nbname + '.ipynb'
+                    that.notebook_path,
+                    nbname
                 );
                 $.ajax(url, settings);
                 return false;
@@ -362,8 +396,8 @@ var IPython = (function (IPython) {
 
 
     NotebookList.prototype.new_notebook = function(){
-        var path = this.notebookPath();
-        var base_project_url = this.baseProjectUrl();
+        var path = this.notebook_path;
+        var base_url = this.base_url;
         var settings = {
             processData : false,
             cache : false,
@@ -374,7 +408,7 @@ var IPython = (function (IPython) {
                 var notebook_name = data.name;
                 window.open(
                     utils.url_join_encode(
-                        base_project_url,
+                        base_url,
                         'notebooks',
                         path,
                         notebook_name),
@@ -383,7 +417,7 @@ var IPython = (function (IPython) {
             }
         };
         var url = utils.url_join_encode(
-            base_project_url,
+            base_url,
             'api/notebooks',
             path
         );

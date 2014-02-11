@@ -28,14 +28,18 @@ import abc
 import sys
 import warnings
 
+from IPython.external.decorator import decorator
+
 # Our own imports
 from IPython.config.configurable import Configurable
 from IPython.lib import pretty
+from IPython.utils import io
 from IPython.utils.traitlets import (
     Bool, Dict, Integer, Unicode, CUnicode, ObjectName, List,
 )
+from IPython.utils.warn import warn
 from IPython.utils.py3compat import (
-    unicode_to_str, with_metaclass, PY3, string_types,
+    unicode_to_str, with_metaclass, PY3, string_types, unicode_type,
 )
 
 if PY3:
@@ -89,6 +93,7 @@ class DisplayFormatter(Configurable):
             HTMLFormatter,
             SVGFormatter,
             PNGFormatter,
+            PDFFormatter,
             JPEGFormatter,
             LatexFormatter,
             JSONFormatter,
@@ -112,6 +117,7 @@ class DisplayFormatter(Configurable):
         * text/latex
         * application/json
         * application/javascript
+        * application/pdf
         * image/png
         * image/jpeg
         * image/svg+xml
@@ -179,6 +185,32 @@ class DisplayFormatter(Configurable):
 # Formatters for specific format types (text, html, svg, etc.)
 #-----------------------------------------------------------------------------
 
+class FormatterWarning(UserWarning):
+    """Warning class for errors in formatters"""
+
+@decorator
+def warn_format_error(method, self, *args, **kwargs):
+    """decorator for warning on failed format call"""
+    try:
+        r = method(self, *args, **kwargs)
+    except NotImplementedError as e:
+        # don't warn on NotImplementedErrors
+        return None
+    except Exception as e:
+        warnings.warn("Exception in %s formatter: %s" % (self.format_type, e),
+            FormatterWarning,
+        )
+        return None
+    if r is None or isinstance(r, self._return_type) or \
+        (isinstance(r, tuple) and r and isinstance(r[0], self._return_type)):
+        return r
+    else:
+        warnings.warn(
+            "%s formatter returned invalid type %s (expected %s) for object: %s" % \
+            (self.format_type, type(r), self._return_type, pretty._safe_repr(args[0])),
+            FormatterWarning
+        )
+
 
 class FormatterABC(with_metaclass(abc.ABCMeta, object)):
     """ Abstract base class for Formatters.
@@ -194,17 +226,16 @@ class FormatterABC(with_metaclass(abc.ABCMeta, object)):
 
     # Is the formatter enabled...
     enabled = True
-
+    
     @abc.abstractmethod
+    @warn_format_error
     def __call__(self, obj):
         """Return a JSON'able representation of the object.
 
-        If the object cannot be formatted by this formatter, then return None
+        If the object cannot be formatted by this formatter,
+        warn and return None.
         """
-        try:
-            return repr(obj)
-        except Exception:
-            return None
+        return repr(obj)
 
 
 def _mod_name_key(typ):
@@ -222,6 +253,7 @@ def _get_type(obj):
     return getattr(obj, '__class__', None) or type(obj)
 
 _raise_key_error = object()
+
 
 class BaseFormatter(Configurable):
     """A base formatter class that is configurable.
@@ -249,6 +281,7 @@ class BaseFormatter(Configurable):
     """
 
     format_type = Unicode('text/plain')
+    _return_type = string_types
 
     enabled = Bool(True, config=True)
 
@@ -265,25 +298,23 @@ class BaseFormatter(Configurable):
     # The deferred-import type-specific printers.
     # Map (modulename, classname) pairs to the format functions.
     deferred_printers = Dict(config=True)
-
+    
+    @warn_format_error
     def __call__(self, obj):
         """Compute the format for an object."""
         if self.enabled:
+            # lookup registered printer
             try:
-                # lookup registered printer
-                try:
-                    printer = self.lookup(obj)
-                except KeyError:
-                    pass
-                else:
-                    return printer(obj)
-                # Finally look for special method names
-                method = pretty._safe_getattr(obj, self.print_method, None)
-                if method is not None:
-                    return method()
-                return None
-            except Exception:
+                printer = self.lookup(obj)
+            except KeyError:
                 pass
+            else:
+                return printer(obj)
+            # Finally look for special method names
+            method = pretty._safe_getattr(obj, self.print_method, None)
+            if method is not None:
+                return method()
+            return None
         else:
             return None
     
@@ -599,6 +630,7 @@ class PlainTextFormatter(BaseFormatter):
 
     #### FormatterABC interface ####
 
+    @warn_format_error
     def __call__(self, obj):
         """Compute the pretty representation of the object."""
         if not self.pprint:
@@ -667,6 +699,8 @@ class PNGFormatter(BaseFormatter):
     format_type = Unicode('image/png')
 
     print_method = ObjectName('_repr_png_')
+    
+    _return_type = (bytes, unicode_type)
 
 
 class JPEGFormatter(BaseFormatter):
@@ -683,6 +717,8 @@ class JPEGFormatter(BaseFormatter):
     format_type = Unicode('image/jpeg')
 
     print_method = ObjectName('_repr_jpeg_')
+
+    _return_type = (bytes, unicode_type)
 
 
 class LatexFormatter(BaseFormatter):
@@ -732,11 +768,29 @@ class JavascriptFormatter(BaseFormatter):
 
     print_method = ObjectName('_repr_javascript_')
 
+
+class PDFFormatter(BaseFormatter):
+    """A PDF formatter.
+
+    To defined the callables that compute to PDF representation of your
+    objects, define a :meth:`_repr_pdf_` method or use the :meth:`for_type`
+    or :meth:`for_type_by_name` methods to register functions that handle
+    this.
+
+    The return value of this formatter should be raw PDF data, *not*
+    base64 encoded.
+    """
+    format_type = Unicode('application/pdf')
+
+    print_method = ObjectName('_repr_pdf_')
+
+
 FormatterABC.register(BaseFormatter)
 FormatterABC.register(PlainTextFormatter)
 FormatterABC.register(HTMLFormatter)
 FormatterABC.register(SVGFormatter)
 FormatterABC.register(PNGFormatter)
+FormatterABC.register(PDFFormatter)
 FormatterABC.register(JPEGFormatter)
 FormatterABC.register(LatexFormatter)
 FormatterABC.register(JSONFormatter)
@@ -755,6 +809,7 @@ def format_display_data(obj, include=None, exclude=None):
     * text/latex
     * application/json
     * application/javascript
+    * application/pdf
     * image/png
     * image/jpeg
     * image/svg+xml

@@ -70,7 +70,13 @@ class KernelManager(LoggingConfigurable, ConnectionFileMixin):
 
     kernel_cmd = List(Unicode, config=True,
         help="""The Popen Command to launch the kernel.
-        Override this if you have a custom
+        Override this if you have a custom kernel.
+        If kernel_cmd is specified in a configuration file,
+        IPython does not pass any arguments to the kernel,
+        because it cannot make any assumptions about the 
+        arguments that the kernel understands. In particular,
+        this means that the kernel does not receive the
+        option --debug if it given on the IPython command line.
         """
     )
 
@@ -240,11 +246,7 @@ class KernelManager(LoggingConfigurable, ConnectionFileMixin):
         self.stop_restarter()
 
         # FIXME: Shutdown does not work on Windows due to ZMQ errors!
-        if sys.platform == 'win32':
-            self._kill_kernel()
-            return
-
-        if now:
+        if now or sys.platform == 'win32':
             if self.has_kernel:
                 self._kill_kernel()
         else:
@@ -267,6 +269,8 @@ class KernelManager(LoggingConfigurable, ConnectionFileMixin):
             self.cleanup_ipc_files()
         else:
             self.cleanup_ipc_files()
+        
+        self._close_control_socket()
 
     def restart_kernel(self, now=False, **kw):
         """Restarts a kernel with the arguments that were used to launch it.

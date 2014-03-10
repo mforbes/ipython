@@ -103,7 +103,7 @@ var IPython = (function (IPython) {
                 var that = $(this);
                 // Upon ENTER, click the OK button.
                 that.find('input[type="text"]').keydown(function (event, ui) {
-                    if (event.which === utils.keycodes.ENTER) {
+                    if (event.which === IPython.keyboard.keycodes.enter) {
                         that.find('.btn-primary').first().click();
                         return false;
                     }
@@ -126,15 +126,17 @@ var IPython = (function (IPython) {
     };
     
     SaveWidget.prototype.update_address_bar = function(){
+        var base_url = IPython.notebook.base_url;
         var nbname = IPython.notebook.notebook_name;
         var path = IPython.notebook.notebook_path;
-        var state = {path : utils.url_join_encode(path, nbname)};
+        var state = {path : path, name: nbname};
         window.history.replaceState(state, "", utils.url_join_encode(
-            "/notebooks",
+            base_url,
+            "notebooks",
             path,
             nbname)
         );
-    }
+    };
 
 
     SaveWidget.prototype.set_save_status = function (msg) {

@@ -343,7 +343,8 @@ var IPython = (function (IPython) {
                 // Insert the subarea into the iframe
                 // We must directly write the html. When using Jquery's append
                 // method, javascript is evaluated in the parent document and
-                // not in the iframe document.
+                // not in the iframe document.  At this point, subarea doesn't
+                // contain any user content.
                 this.contentDocument.write(subarea.html());
 
                 this.contentDocument.close();
@@ -370,12 +371,10 @@ var IPython = (function (IPython) {
         // display a message when a javascript error occurs in display output
         var msg = "Javascript error adding output!"
         if ( element === undefined ) return;
-        element.append(
-            $('<div/>').html(msg + "<br/>" +
-                err.toString() +
-                '<br/>See your browser Javascript console for more details.'
-            ).addClass('js-error')
-        );
+        element
+            .append($('<div/>').text(msg).addClass('js-error'))
+            .append($('<div/>').text(err.toString()).addClass('js-error'))
+            .append($('<div/>').text('See your browser Javascript console for more details.').addClass('js-error'));
     };
     
     OutputArea.prototype._safe_append = function (toinsert) {
@@ -404,7 +403,10 @@ var IPython = (function (IPython) {
         if (this.prompt_area) {
             toinsert.find('div.prompt').addClass('output_prompt').text('Out[' + n + ']:');
         }
-        this.append_mime_type(json, toinsert);
+        var inserted = this.append_mime_type(json, toinsert);
+        if (inserted) {
+            inserted.addClass('output_pyout');
+        }
         this._safe_append(toinsert);
         // If we just output latex, typeset it.
         if ((json['text/latex'] !== undefined) || (json['text/html'] !== undefined)) {
@@ -423,7 +425,7 @@ var IPython = (function (IPython) {
             }
             s = s + '\n';
             var toinsert = this.create_output_area();
-            this.append_text(s, {}, toinsert);
+            this.append_text(s, {}, toinsert).addClass('output_pyerr');
             this._safe_append(toinsert);
         }
     };
@@ -447,6 +449,8 @@ var IPython = (function (IPython) {
                 var pre = this.element.find('div.'+subclass).last().find('pre');
                 var html = utils.fixCarriageReturn(
                     pre.html() + utils.fixConsole(text));
+                // The only user content injected with this HTML call is
+                // escaped by the fixConsole() method.
                 pre.html(html);
                 return;
             }
@@ -460,7 +464,7 @@ var IPython = (function (IPython) {
 
         // If we got here, attach a new div
         var toinsert = this.create_output_area();
-        this.append_text(text, {}, toinsert, "output_stream "+subclass);
+        this.append_text(text, {}, toinsert).addClass("output_stream "+subclass);
         this._safe_append(toinsert);
     };
 
@@ -479,6 +483,7 @@ var IPython = (function (IPython) {
 
     OutputArea.safe_outputs = {
         'text/plain' : true,
+        'text/latex' : true,
         'image/png' : true,
         'image/jpeg' : true
     };
@@ -488,22 +493,24 @@ var IPython = (function (IPython) {
             var type = OutputArea.display_order[type_i];
             var append = OutputArea.append_map[type];
             if ((json[type] !== undefined) && append) {
+                var value = json[type];
                 if (!this.trusted && !OutputArea.safe_outputs[type]) {
-                    // not trusted show warning and do not display
-                    var content = {
-                        text : "Untrusted " + type + " output ignored.",
-                        stream : "stderr"
+                    // not trusted, sanitize HTML
+                    if (type==='text/html' || type==='text/svg') {
+                        value = IPython.security.sanitize_html(value);
+                    } else {
+                        // don't display if we don't know how to sanitize it
+                        console.log("Ignoring untrusted " + type + " output.");
+                        continue;
                     }
-                    this.append_stream(content);
-                    continue;
                 }
                 var md = json.metadata || {};
-                var toinsert = append.apply(this, [json[type], md, element]);
-                $([IPython.events]).trigger('output_appended.OutputArea', [type, json[type], md, toinsert]);
-                return true;
+                var toinsert = append.apply(this, [value, md, element]);
+                $([IPython.events]).trigger('output_appended.OutputArea', [type, value, md, toinsert]);
+                return toinsert;
             }
         }
-        return false;
+        return null;
     };
 
 
@@ -538,16 +545,15 @@ var IPython = (function (IPython) {
     };
 
 
-    OutputArea.prototype.append_text = function (data, md, element, extra_class) {
+    OutputArea.prototype.append_text = function (data, md, element) {
         var type = 'text/plain';
         var toinsert = this.create_output_subarea(md, "output_text", type);
         // escape ANSI & HTML specials in plaintext:
         data = utils.fixConsole(data);
         data = utils.fixCarriageReturn(data);
         data = utils.autoLinkUrls(data);
-        if (extra_class){
-            toinsert.addClass(extra_class);
-        }
+        // The only user content injected with this HTML call is
+        // escaped by the fixConsole() method.
         toinsert.append($("<pre/>").html(data));
         element.append(toinsert);
         return toinsert;
@@ -564,15 +570,13 @@ var IPython = (function (IPython) {
 
 
     OutputArea.prototype._dblclick_to_reset_size = function (img) {
-        // schedule wrapping image in resizable after a delay,
-        // so we don't end up calling resize on a zero-size object
-        var that = this;
-        setTimeout(function () {
+        // wrap image after it's loaded on the page,
+        // otherwise the measured initial size will be incorrect
+        img.on("load", function (){
             var h0 = img.height();
             var w0 = img.width();
             if (!(h0 && w0)) {
-                // zero size, schedule another timeout
-                that._dblclick_to_reset_size(img);
+                // zero size, don't make it resizable
                 return;
             }
             img.resizable({
@@ -586,7 +590,7 @@ var IPython = (function (IPython) {
                 img.parent().width(w0);
                 img.width(w0);
             });
-        }, 250);
+        });
     };
     
     var set_width_height = function (img, md, mime) {
@@ -668,7 +672,7 @@ var IPython = (function (IPython) {
                 .keydown(function (event, ui) {
                     // make sure we submit on enter,
                     // and don't re-execute the *cell* on shift-enter
-                    if (event.which === utils.keycodes.ENTER) {
+                    if (event.which === IPython.keyboard.keycodes.enter) {
                         that._submit_raw_input();
                         return false;
                     }
@@ -819,7 +823,6 @@ var IPython = (function (IPython) {
         "image/svg+xml" : "svg",
         "image/png" : "png",
         "image/jpeg" : "jpeg",
-        "application/pdf" : "pdf",
         "text/latex" : "latex",
         "application/json" : "json",
         "application/javascript" : "javascript",
@@ -831,7 +834,6 @@ var IPython = (function (IPython) {
         "svg" : "image/svg+xml",
         "png" : "image/png",
         "jpeg" : "image/jpeg",
-        "pdf" : "application/pdf",
         "latex" : "text/latex",
         "json" : "application/json",
         "javascript" : "application/javascript",
@@ -855,7 +857,6 @@ var IPython = (function (IPython) {
         "image/png" : OutputArea.prototype.append_png,
         "image/jpeg" : OutputArea.prototype.append_jpeg,
         "text/latex" : OutputArea.prototype.append_latex,
-        "application/json" : OutputArea.prototype.append_json,
         "application/javascript" : OutputArea.prototype.append_javascript,
         "application/pdf" : OutputArea.prototype.append_pdf
     };

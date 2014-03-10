@@ -110,19 +110,21 @@ var IPython = (function (IPython) {
             that.dirty = data.value;
         });
 
+        $([IPython.events]).on('trust_changed.Notebook', function (event, data) {
+            that.trusted = data.value;
+        });
+
         $([IPython.events]).on('select.Cell', function (event, data) {
             var index = that.find_cell_index(data.cell);
             that.select(index);
         });
 
         $([IPython.events]).on('edit_mode.Cell', function (event, data) {
-            var index = that.find_cell_index(data.cell);
-            that.select(index);
-            that.edit_mode();
+            that.handle_edit_mode(data.cell);
         });
 
         $([IPython.events]).on('command_mode.Cell', function (event, data) {
-            that.command_mode();
+            that.handle_command_mode(data.cell);
         });
 
         $([IPython.events]).on('status_autorestarting.Kernel', function () {
@@ -459,7 +461,11 @@ var IPython = (function (IPython) {
         if (this.is_valid_cell_index(index)) {
             var sindex = this.get_selected_index();
             if (sindex !== null && index !== sindex) {
-                this.command_mode();
+                // If we are about to select a different cell, make sure we are
+                // first in command mode.
+                if (this.mode !== 'command') {
+                    this.command_mode();
+                }
                 this.get_cell(sindex).unselect();
             }
             var cell = this.get_cell(index);
@@ -504,6 +510,13 @@ var IPython = (function (IPython) {
 
     // Edit/Command mode
 
+    /**
+     * Gets the index of the cell that is in edit mode.
+     *
+     * @method get_edit_index
+     *
+     * @return index {int}
+     **/
     Notebook.prototype.get_edit_index = function () {
         var result = null;
         this.get_cell_elements().filter(function (index) {
@@ -514,32 +527,69 @@ var IPython = (function (IPython) {
         return result;
     };
 
-    Notebook.prototype.command_mode = function () {
+    /**
+     * Handle when a a cell blurs and the notebook should enter command mode.
+     *
+     * @method handle_command_mode
+     * @param [cell] {Cell} Cell to enter command mode on.
+     **/
+    Notebook.prototype.handle_command_mode = function (cell) {
         if (this.mode !== 'command') {
-            $([IPython.events]).trigger('command_mode.Notebook');
-            var index = this.get_edit_index();
-            var cell = this.get_cell(index);
-            if (cell) {
-                cell.command_mode();
-            }
+            cell.command_mode();
             this.mode = 'command';
+            $([IPython.events]).trigger('command_mode.Notebook');
             IPython.keyboard_manager.command_mode();
         }
     };
 
-    Notebook.prototype.edit_mode = function () {
-        if (this.mode !== 'edit') {
-            $([IPython.events]).trigger('edit_mode.Notebook');
-            var cell = this.get_selected_cell();
-            if (cell === null) {return;}  // No cell is selected
-            // We need to set the mode to edit to prevent reentering this method
-            // when cell.edit_mode() is called below.
-            this.mode = 'edit';
-            IPython.keyboard_manager.edit_mode();
-            cell.edit_mode();
+    /**
+     * Make the notebook enter command mode.
+     *
+     * @method command_mode
+     **/
+    Notebook.prototype.command_mode = function () {
+        var cell = this.get_cell(this.get_edit_index());
+        if (cell && this.mode !== 'command') {
+            // We don't call cell.command_mode, but rather call cell.focus_cell()
+            // which will blur and CM editor and trigger the call to
+            // handle_command_mode.
+            cell.focus_cell();
         }
     };
 
+    /**
+     * Handle when a cell fires it's edit_mode event.
+     *
+     * @method handle_edit_mode
+     * @param [cell] {Cell} Cell to enter edit mode on.
+     **/
+    Notebook.prototype.handle_edit_mode = function (cell) {
+        if (cell && this.mode !== 'edit') {
+            cell.edit_mode();
+            this.mode = 'edit';
+            $([IPython.events]).trigger('edit_mode.Notebook');
+            IPython.keyboard_manager.edit_mode();
+        }
+    };
+
+    /**
+     * Make a cell enter edit mode.
+     *
+     * @method edit_mode
+     **/
+    Notebook.prototype.edit_mode = function () {
+        var cell = this.get_selected_cell();
+        if (cell && this.mode !== 'edit') {
+            cell.unrender();
+            cell.focus_editor();
+        }
+    };
+
+    /**
+     * Focus the currently selected cell.
+     *
+     * @method focus_cell
+     **/
     Notebook.prototype.focus_cell = function () {
         var cell = this.get_selected_cell();
         if (cell === null) {return;}  // No cell is selected
@@ -1404,7 +1454,6 @@ var IPython = (function (IPython) {
         
         cell.execute();
         this.command_mode();
-        cell.focus_cell();
         this.set_dirty(true);
     };
 
@@ -1421,6 +1470,7 @@ var IPython = (function (IPython) {
 
         // If we are at the end always insert a new cell and return
         if (cell_index === (this.ncells()-1)) {
+            this.command_mode();
             this.insert_cell_below('code');
             this.select(cell_index+1);
             this.edit_mode();
@@ -1428,7 +1478,8 @@ var IPython = (function (IPython) {
             this.set_dirty(true);
             return;
         }
-  
+
+        this.command_mode();
         this.insert_cell_below('code');
         this.select(cell_index+1);
         this.edit_mode();
@@ -1449,6 +1500,7 @@ var IPython = (function (IPython) {
 
         // If we are at the end always insert a new cell and return
         if (cell_index === (this.ncells()-1)) {
+            this.command_mode();
             this.insert_cell_below('code');
             this.select(cell_index+1);
             this.edit_mode();
@@ -1457,8 +1509,9 @@ var IPython = (function (IPython) {
             return;
         }
 
+        this.command_mode();
         this.select(cell_index+1);
-        this.get_cell(cell_index+1).focus_cell();
+        this.focus_cell();
         this.set_dirty(true);
     };
 
@@ -1499,6 +1552,7 @@ var IPython = (function (IPython) {
      * @param {Number} end Index of the last cell to execute (exclusive)
      */
     Notebook.prototype.execute_cell_range = function (start, end) {
+        this.command_mode();
         for (var i=start; i<end; i++) {
             this.select(i);
             this.execute_cell();
@@ -1563,6 +1617,7 @@ var IPython = (function (IPython) {
         // Save the metadata and name.
         this.metadata = content.metadata;
         this.notebook_name = data.name;
+        var trusted = true;
         // Only handle 1 worksheet for now.
         var worksheet = content.worksheets[0];
         if (worksheet !== undefined) {
@@ -1583,7 +1638,14 @@ var IPython = (function (IPython) {
 
                 new_cell = this.insert_cell_at_index(cell_data.cell_type, i);
                 new_cell.fromJSON(cell_data);
+                if (new_cell.cell_type == 'code' && !new_cell.output_area.trusted) {
+                    trusted = false;
+                }
             }
+        }
+        if (trusted != this.trusted) {
+            this.trusted = trusted;
+            $([IPython.events]).trigger("trust_changed.Notebook", trusted);
         }
         if (content.worksheets.length > 1) {
             IPython.dialog.modal({
@@ -1610,8 +1672,13 @@ var IPython = (function (IPython) {
         var cells = this.get_cells();
         var ncells = cells.length;
         var cell_array = new Array(ncells);
+        var trusted = true;
         for (var i=0; i<ncells; i++) {
-            cell_array[i] = cells[i].toJSON();
+            var cell = cells[i];
+            if (cell.cell_type == 'code' && !cell.output_area.trusted) {
+                trusted = false;
+            }
+            cell_array[i] = cell.toJSON();
         }
         var data = {
             // Only handle 1 worksheet for now.
@@ -1621,6 +1688,10 @@ var IPython = (function (IPython) {
             }],
             metadata : this.metadata
         };
+        if (trusted != this.trusted) {
+            this.trusted = trusted;
+            $([IPython.events]).trigger("trust_changed.Notebook", trusted);
+        }
         return data;
     };
 
@@ -1740,6 +1811,54 @@ var IPython = (function (IPython) {
      */
     Notebook.prototype.save_notebook_error = function (xhr, status, error) {
         $([IPython.events]).trigger('notebook_save_failed.Notebook', [xhr, status, error]);
+    };
+
+    /**
+     * Explicitly trust the output of this notebook.
+     *
+     * @method trust_notebook
+     */
+    Notebook.prototype.trust_notebook = function (extra_settings) {
+        var body = $("<div>").append($("<p>")
+            .text("A trusted IPython notebook may execute hidden malicious code ")
+            .append($("<strong>")
+                .append(
+                    $("<em>").text("when you open it")
+                )
+            ).append(".").append(
+                " Selecting trust will immediately reload this notebook in a trusted state."
+            ).append(
+                " For more information, see the "
+            ).append($("<a>").attr("href", "http://ipython.org/security.html")
+                .text("IPython security documentation")
+            ).append(".")
+        );
+
+        var nb = this;
+        IPython.dialog.modal({
+            title: "Trust this notebook?",
+            body: body,
+
+            buttons: {
+                Cancel : {},
+                Trust : {
+                    class : "btn-danger",
+                    click : function () {
+                        var cells = nb.get_cells();
+                        for (var i = 0; i < cells.length; i++) {
+                            var cell = cells[i];
+                            if (cell.cell_type == 'code') {
+                                cell.output_area.trusted = true;
+                            }
+                        }
+                        $([IPython.events]).on('notebook_saved.Notebook', function () {
+                            window.location.reload();
+                        });
+                        nb.save_notebook();
+                    }
+                }
+            }
+        });
     };
 
     Notebook.prototype.new_notebook = function(){
@@ -1873,7 +1992,7 @@ var IPython = (function (IPython) {
                 var that = $(this);
                 // Upon ENTER, click the OK button.
                 that.find('input[type="text"]').keydown(function (event, ui) {
-                    if (event.which === utils.keycodes.ENTER) {
+                    if (event.which === IPython.keyboard.keycodes.enter) {
                         that.find('.btn-primary').first().click();
                     }
                 });
@@ -1925,11 +2044,10 @@ var IPython = (function (IPython) {
         this.fromJSON(data);
         if (this.ncells() === 0) {
             this.insert_cell_below('code');
-            this.select(0);
-            this.edit_mode();
+            this.edit_mode(0);
         } else {
             this.select(0);
-            this.command_mode();
+            this.handle_command_mode(this.get_cell(0));
         }
         this.set_dirty(false);
         this.scroll_to_top();
@@ -2286,3 +2404,4 @@ var IPython = (function (IPython) {
     return IPython;
 
 }(IPython));
+

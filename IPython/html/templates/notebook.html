@@ -11,6 +11,7 @@
 window.mathjax_url = "{{mathjax_url}}";
 </script>
 
+<link rel="stylesheet" href="{{ static_url("components/bootstrap-tour/build/css/bootstrap-tour.min.css") }}" type="text/css" />
 <link rel="stylesheet" href="{{ static_url("components/codemirror/lib/codemirror.css") }}">
 
 {{super()}}
@@ -23,7 +24,6 @@ window.mathjax_url = "{{mathjax_url}}";
 
 data-project="{{project}}"
 data-base-url="{{base_url}}"
-data-base-kernel-url="{{base_kernel_url}}"
 data-notebook-name="{{notebook_name}}"
 data-notebook-path="{{notebook_path}}"
 class="notebook_app"
@@ -87,7 +87,10 @@ class="notebook_app"
                     </ul>
                 </li>
                 <li class="divider"></li>
-                
+                <li id="trust_notebook"
+                    title="Trust the output of this notebook">
+                    <a href="#" >Trust Notebook</a></li>
+                <li class="divider"></li>
                 <li id="kill_and_exit"
                     title="Shutdown this notebook's kernel, and close this window">
                     <a href="#" >Close and halt</a></li>
@@ -216,6 +219,7 @@ class="notebook_app"
         </li>
         <li class="dropdown"><a href="#" class="dropdown-toggle" data-toggle="dropdown">Help</a>
             <ul  id="help_menu" class="dropdown-menu">
+                <li id="notebook_tour" title="A quick tour of the notebook user interface"><a href="#">User Interface Tour</a></li>
                 <li id="keyboard_shortcuts" title="Opens a tooltip with all keyboard shortcuts"><a href="#">Keyboard Shortcuts</a></li>
                 <li class="divider"></li>
                 {% set
@@ -292,14 +296,16 @@ class="notebook_app"
 
 {{super()}}
 
+<script src="{{ static_url("components/google-caja/html-css-sanitizer-minified.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/lib/codemirror.js") }}" charset="utf-8"></script>
 <script type="text/javascript">
-    CodeMirror.modeURL = "{{ static_url("components/codemirror/mode/%N/%N.js") }}";
+    CodeMirror.modeURL = "{{ static_url("components/codemirror/mode/%N/%N.js", include_version=False) }}";
 </script>
 <script src="{{ static_url("components/codemirror/addon/mode/loadmode.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/addon/mode/multiplex.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/addon/mode/overlay.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/addon/edit/matchbrackets.js") }}" charset="utf-8"></script>
+<script src="{{ static_url("components/codemirror/addon/edit/closebrackets.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/addon/comment/comment.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/mode/htmlmixed/htmlmixed.js") }}" charset="utf-8"></script>
 <script src="{{ static_url("components/codemirror/mode/xml/xml.js") }}" charset="utf-8"></script>
@@ -317,6 +323,8 @@ class="notebook_app"
 
 <script src="{{ static_url("base/js/events.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("base/js/utils.js") }}" type="text/javascript" charset="utf-8"></script>
+<script src="{{ static_url("base/js/keyboard.js") }}" type="text/javascript" charset="utf-8"></script>
+<script src="{{ static_url("base/js/security.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("base/js/dialog.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("services/kernels/js/kernel.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("services/kernels/js/comm.js") }}" type="text/javascript" charset="utf-8"></script>
@@ -340,6 +348,8 @@ class="notebook_app"
 <script src="{{ static_url("notebook/js/notificationwidget.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("notebook/js/notificationarea.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("notebook/js/tooltip.js") }}" type="text/javascript" charset="utf-8"></script>
+<script src="{{ static_url("notebook/js/tour.js") }}" type="text/javascript" charset="utf-8"></script>
+
 <script src="{{ static_url("notebook/js/config.js") }}" type="text/javascript" charset="utf-8"></script>
 <script src="{{ static_url("notebook/js/main.js") }}" type="text/javascript" charset="utf-8"></script>
 

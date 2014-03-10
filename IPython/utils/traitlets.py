@@ -371,7 +371,14 @@ class TraitType(object):
         new_value = self._validate(obj, value)
         old_value = self.__get__(obj)
         obj._trait_values[self.name] = new_value
-        if old_value != new_value:
+        try:
+            silent = bool(old_value == new_value)
+        except:
+            # if there is an error in comparing, default to notify
+            silent = False
+        if silent is not True:
+            # we explicitly compare silent to True just in case the equality
+            # comparison above returns something other than True/False
             obj._notify_trait(self.name, old_value, new_value)
 
     def _validate(self, obj, value):
@@ -585,27 +592,33 @@ class HasTraits(py3compat.with_metaclass(MetaHasTraits, object)):
 
     @classmethod
     def class_trait_names(cls, **metadata):
-        """Get a list of all the names of this classes traits.
+        """Get a list of all the names of this class' traits.
 
-        This method is just like the :meth:`trait_names` method, but is unbound.
+        This method is just like the :meth:`trait_names` method,
+        but is unbound.
         """
         return cls.class_traits(**metadata).keys()
 
     @classmethod
     def class_traits(cls, **metadata):
-        """Get a list of all the traits of this class.
+        """Get a `dict` of all the traits of this class.  The dictionary
+        is keyed on the name and the values are the TraitType objects.
 
         This method is just like the :meth:`traits` method, but is unbound.
 
         The TraitTypes returned don't know anything about the values
         that the various HasTrait's instances are holding.
 
-        This follows the same algorithm as traits does and does not allow
-        for any simple way of specifying merely that a metadata name
-        exists, but has any value.  This is because get_metadata returns
-        None if a metadata key doesn't exist.
+        The metadata kwargs allow functions to be passed in which
+        filter traits based on metadata values.  The functions should
+        take a single value as an argument and return a boolean.  If
+        any function returns False, then the trait is not included in
+        the output.  This does not allow for any simple way of
+        testing that a metadata name exists and has any
+        value because get_metadata returns None if a metadata key
+        doesn't exist.
         """
-        traits = dict([memb for memb in getmembers(cls) if \
+        traits = dict([memb for memb in getmembers(cls) if
                      isinstance(memb[1], TraitType)])
 
         if len(metadata) == 0:
@@ -626,21 +639,26 @@ class HasTraits(py3compat.with_metaclass(MetaHasTraits, object)):
         return result
 
     def trait_names(self, **metadata):
-        """Get a list of all the names of this classes traits."""
+        """Get a list of all the names of this class' traits."""
         return self.traits(**metadata).keys()
 
     def traits(self, **metadata):
-        """Get a list of all the traits of this class.
+        """Get a `dict` of all the traits of this class.  The dictionary
+        is keyed on the name and the values are the TraitType objects.
 
         The TraitTypes returned don't know anything about the values
         that the various HasTrait's instances are holding.
 
-        This follows the same algorithm as traits does and does not allow
-        for any simple way of specifying merely that a metadata name
-        exists, but has any value.  This is because get_metadata returns
-        None if a metadata key doesn't exist.
+        The metadata kwargs allow functions to be passed in which
+        filter traits based on metadata values.  The functions should
+        take a single value as an argument and return a boolean.  If
+        any function returns False, then the trait is not included in
+        the output.  This does not allow for any simple way of
+        testing that a metadata name exists and has any
+        value because get_metadata returns None if a metadata key
+        doesn't exist.
         """
-        traits = dict([memb for memb in getmembers(self.__class__) if \
+        traits = dict([memb for memb in getmembers(self.__class__) if
                      isinstance(memb[1], TraitType)])
 
         if len(metadata) == 0:
@@ -1203,6 +1221,7 @@ class Container(Instance):
     To be subclassed by overriding klass.
     """
     klass = None
+    _cast_types = ()
     _valid_defaults = SequenceTypes
     _trait = None
 
@@ -1266,6 +1285,8 @@ class Container(Instance):
         raise TraitError(e)
 
     def validate(self, obj, value):
+        if isinstance(value, self._cast_types):
+            value = self.klass(value)
         value = super(Container, self).validate(obj, value)
         if value is None:
             return value
@@ -1291,6 +1312,7 @@ class Container(Instance):
 class List(Container):
     """An instance of a Python list."""
     klass = list
+    _cast_types = (tuple,)
 
     def __init__(self, trait=None, default_value=None, minlen=0, maxlen=sys.maxsize,
                 allow_none=True, **metadata):
@@ -1347,15 +1369,27 @@ class List(Container):
             self.length_error(obj, value)
 
         return super(List, self).validate_elements(obj, value)
+    
+    def validate(self, obj, value):
+        value = super(List, self).validate(obj, value)
+        if value is None:
+            return value
+
+        value = self.validate_elements(obj, value)
+
+        return value
+        
 
 
-class Set(Container):
+class Set(List):
     """An instance of a Python set."""
     klass = set
+    _cast_types = (tuple, list)
 
 class Tuple(Container):
     """An instance of a Python tuple."""
     klass = tuple
+    _cast_types = (list,)
 
     def __init__(self, *traits, **metadata):
         """Tuple(*traits, default_value=None, allow_none=True, **medatata)

@@ -22,6 +22,7 @@ from __future__ import print_function
 import os
 import struct
 
+from IPython.core.formatters import _safe_get_formatter_method
 from IPython.utils.py3compat import (string_types, cast_bytes_py2, cast_unicode,
                                      unicode_type)
 from IPython.testing.skipdoctest import skip_doctest
@@ -116,7 +117,7 @@ def display(*objs, **kwargs):
     for obj in objs:
 
         # If _ipython_display_ is defined, use that to display this object.
-        display_method = getattr(obj, '_ipython_display_', None)
+        display_method = _safe_get_formatter_method(obj, '_ipython_display_')
         if display_method is not None:
             try:
                 display_method(**kwargs)
@@ -729,23 +730,29 @@ def set_matplotlib_formats(*formats, **kwargs):
 
     To set this in your config files use the following::
     
-        c.InlineBackend.figure_formats = {'pdf', 'png', 'svg'}
-        c.InlineBackend.quality = 90
+        c.InlineBackend.figure_formats = {'png', 'jpeg'}
+        c.InlineBackend.print_figure_kwargs.update({'quality' : 90})
 
     Parameters
     ----------
-    *formats : list, tuple
-        One or a set of figure formats to enable: 'png', 'retina', 'jpeg', 'svg', 'pdf'.
-    quality : int
-        A percentage for the quality of JPEG figures. Defaults to 90.
+    *formats : strs
+        One or more figure formats to enable: 'png', 'retina', 'jpeg', 'svg', 'pdf'.
+    **kwargs :
+        Keyword args will be relayed to ``figure.canvas.print_figure``.
     """
     from IPython.core.interactiveshell import InteractiveShell
     from IPython.core.pylabtools import select_figure_formats
+    from IPython.kernel.zmq.pylab.config import InlineBackend
+    # build kwargs, starting with InlineBackend config
+    kw = {}
+    cfg = InlineBackend.instance()
+    kw.update(cfg.print_figure_kwargs)
+    kw.update(**kwargs)
     shell = InteractiveShell.instance()
-    select_figure_formats(shell, formats, quality=90)
+    select_figure_formats(shell, formats, **kw)
 
 @skip_doctest
-def set_matplotlib_close(close):
+def set_matplotlib_close(close=True):
     """Set whether the inline backend closes all figures automatically or not.
     
     By default, the inline backend used in the IPython Notebook will close all
@@ -766,7 +773,7 @@ def set_matplotlib_close(close):
         Should all matplotlib figures be automatically closed after each cell is
         run?
     """
-    from IPython.kernel.zmq.pylab.backend_inline import InlineBackend
-    ilbe = InlineBackend.instance()
-    ilbe.close_figures = close
+    from IPython.kernel.zmq.pylab.config import InlineBackend
+    cfg = InlineBackend.instance()
+    cfg.close_figures = close
 

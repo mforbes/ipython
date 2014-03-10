@@ -38,15 +38,15 @@ class MainKernelHandler(IPythonHandler):
     @json_errors
     def get(self):
         km = self.kernel_manager
-        self.finish(jsonapi.dumps(km.list_kernels(self.ws_url)))
+        self.finish(jsonapi.dumps(km.list_kernels()))
 
     @web.authenticated
     @json_errors
     def post(self):
         km = self.kernel_manager
         kernel_id = km.start_kernel()
-        model = km.kernel_model(kernel_id, self.ws_url)
-        location = url_path_join(self.base_kernel_url, 'api', 'kernels', kernel_id)
+        model = km.kernel_model(kernel_id)
+        location = url_path_join(self.base_url, 'api', 'kernels', kernel_id)
         self.set_header('Location', url_escape(location))
         self.set_status(201)
         self.finish(jsonapi.dumps(model))
@@ -61,7 +61,7 @@ class KernelHandler(IPythonHandler):
     def get(self, kernel_id):
         km = self.kernel_manager
         km._check_kernel_id(kernel_id)
-        model = km.kernel_model(kernel_id, self.ws_url)
+        model = km.kernel_model(kernel_id)
         self.finish(jsonapi.dumps(model))
 
     @web.authenticated
@@ -84,8 +84,8 @@ class KernelActionHandler(IPythonHandler):
             self.set_status(204)
         if action == 'restart':
             km.restart_kernel(kernel_id)
-            model = km.kernel_model(kernel_id, self.ws_url)
-            self.set_header('Location', '{0}api/kernels/{1}'.format(self.base_kernel_url, kernel_id))
+            model = km.kernel_model(kernel_id)
+            self.set_header('Location', '{0}api/kernels/{1}'.format(self.base_url, kernel_id))
             self.write(jsonapi.dumps(model))
         self.finish()
 

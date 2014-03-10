@@ -20,7 +20,6 @@ from __future__ import division
 
 import time
 from datetime import datetime
-from tempfile import mktemp
 
 import zmq
 
@@ -196,7 +195,12 @@ class TestClient(ClusterTestCase):
         self.assertTrue(isinstance(allqs, dict))
         intkeys = list(allqs.keys())
         intkeys.remove('unassigned')
-        self.assertEqual(sorted(intkeys), sorted(self.client.ids))
+        print("intkeys", intkeys)
+        intkeys = sorted(intkeys)
+        ids = self.client.ids
+        print("client.ids", ids)
+        ids = sorted(self.client.ids)
+        self.assertEqual(intkeys, ids)
         unassigned = allqs.pop('unassigned')
         for eid,qs in allqs.items():
             self.assertTrue(isinstance(qs, dict))

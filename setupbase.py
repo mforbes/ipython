@@ -149,7 +149,9 @@ def find_package_data():
     static_data.extend([
         pjoin(components, "backbone", "backbone-min.js"),
         pjoin(components, "bootstrap", "bootstrap", "js", "bootstrap.min.js"),
+        pjoin(components, "bootstrap-tour", "build", "js", "bootstrap-tour.min.js"),
         pjoin(components, "font-awesome", "font", "*.*"),
+        pjoin(components, "google-caja", "html-css-sanitizer-minified.js"),
         pjoin(components, "highlight.js", "build", "highlight.pack.js"),
         pjoin(components, "jquery", "jquery.min.js"),
         pjoin(components, "jquery-ui", "ui", "minified", "jquery-ui.min.js"),
@@ -188,7 +190,12 @@ def find_package_data():
         'IPython.nbformat' : ['tests/*.ipynb']
     }
     
-    # verify that package_data makes sense
+    return package_data
+
+
+def check_package_data(package_data):
+    """verify that package_data globs make sense"""
+    print("checking package data")
     for pkg, data in package_data.items():
         pkg_root = pjoin(*pkg.split('.'))
         for d in data:
@@ -198,7 +205,17 @@ def find_package_data():
             else:
                 assert os.path.exists(path), "Missing package data: %s" % path
 
-    return package_data
+
+def check_package_data_first(command):
+    """decorator for checking package_data before running a given command
+    
+    Probably only needs to wrap build_py
+    """
+    class DecoratedCommand(command):
+        def run(self):
+            check_package_data(self.package_data)
+            command.run(self)
+    return DecoratedCommand
 
 
 #---------------------------------------------------------------------------
@@ -624,10 +641,11 @@ def get_bdist_wheel():
                     if found:
                         lis.pop(idx)
                 
-                for pkg in ("readline", "pyreadline"):
+                for pkg in ("gnureadline", "pyreadline", "mock"):
                     _remove_startswith(requires, pkg)
-                requires.append("readline; sys.platform == 'darwin'")
-                requires.append("pyreadline (>=2.0); sys.platform == 'win32'")
+                requires.append("gnureadline; sys.platform == 'darwin' and platform.python_implementation == 'CPython'")
+                requires.append("pyreadline (>=2.0); sys.platform == 'win32' and platform.python_implementation == 'CPython'")
+                requires.append("mock; extra == 'test' and python_version < '3.3'")
                 for r in requires:
                     pkg_info['Requires-Dist'] = r
                 write_pkg_info(metadata_path, pkg_info)

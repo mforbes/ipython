@@ -39,8 +39,8 @@ from IPython.utils import py3compat
 from IPython.utils.dir2 import safe_hasattr
 from IPython.utils.text import indent
 from IPython.utils.wildcard import list_namespace
-from IPython.utils.coloransi import *
-from IPython.utils.py3compat import cast_unicode, string_types
+from IPython.utils.coloransi import TermColors, ColorScheme, ColorSchemeTable
+from IPython.utils.py3compat import cast_unicode, string_types, PY3
 
 # builtin docstrings to ignore
 _func_call_docstring = types.FunctionType.__call__.__doc__
@@ -48,6 +48,9 @@ _object_init_docstring = object.__init__.__doc__
 _builtin_type_docstrings = {
     t.__doc__ for t in (types.ModuleType, types.MethodType, types.FunctionType)
 }
+
+_builtin_func_type = type(all)
+_builtin_meth_type = type(str.upper)  # Bound methods have the same type as builtin functions
 #****************************************************************************
 # Builtin color schemes
 
@@ -117,8 +120,8 @@ def get_encoding(obj):
         # Print only text files, not extension binaries.  Note that
         # getsourcelines returns lineno with 1-offset and page() uses
         # 0-offset, so we must adjust.
-        buffer = stdlib_io.open(ofile, 'rb')   # Tweaked to use io.open for Python 2
-        encoding, lines = openpy.detect_encoding(buffer.readline)
+        with stdlib_io.open(ofile, 'rb') as buffer:   # Tweaked to use io.open for Python 2
+            encoding, lines = openpy.detect_encoding(buffer.readline)
         return encoding
 
 def getdoc(obj):
@@ -180,27 +183,24 @@ def getsource(obj,is_binary=False):
         encoding = get_encoding(obj)
         return cast_unicode(src, encoding=encoding)
 
+
+def is_simple_callable(obj):
+    """True if obj is a function ()"""
+    return (inspect.isfunction(obj) or inspect.ismethod(obj) or \
+            isinstance(obj, _builtin_func_type) or isinstance(obj, _builtin_meth_type))
+
+
 def getargspec(obj):
-    """Get the names and default values of a function's arguments.
+    """Wrapper around :func:`inspect.getfullargspec` on Python 3, and
+    :func:inspect.getargspec` on Python 2.
+    
+    In addition to functions and methods, this can also handle objects with a
+    ``__call__`` attribute.
+    """
+    if safe_hasattr(obj, '__call__') and not is_simple_callable(obj):
+        obj = obj.__call__
 
-    A tuple of four things is returned: (args, varargs, varkw, defaults).
-    'args' is a list of the argument names (it may contain nested lists).
-    'varargs' and 'varkw' are the names of the * and ** arguments or None.
-    'defaults' is an n-tuple of the default values of the last n arguments.
-
-    Modified version of inspect.getargspec from the Python Standard
-    Library."""
-
-    if inspect.isfunction(obj):
-        func_obj = obj
-    elif inspect.ismethod(obj):
-        func_obj = obj.__func__
-    elif hasattr(obj, '__call__'):
-        func_obj = obj.__call__
-    else:
-        raise TypeError('arg is not a Python function')
-    args, varargs, varkw = inspect.getargs(func_obj.__code__)
-    return args, varargs, varkw, func_obj.__defaults__
+    return inspect.getfullargspec(obj) if PY3 else inspect.getargspec(obj)
 
 
 def format_argspec(argspec):
@@ -354,7 +354,6 @@ class Inspector:
 
         If any exception is generated, None is returned instead and the
         exception is suppressed."""
-
         try:
             hdef = oname + inspect.formatargspec(*getargspec(obj))
             return cast_unicode(hdef)
@@ -443,17 +442,17 @@ class Inspector:
         if formatter:
             ds = formatter(ds)
         if ds:
-            lines.append(head("Class Docstring:"))
+            lines.append(head("Class docstring:"))
             lines.append(indent(ds))
         if inspect.isclass(obj) and hasattr(obj, '__init__'):
             init_ds = getdoc(obj.__init__)
             if init_ds is not None:
-                lines.append(head("Constructor Docstring:"))
+                lines.append(head("Init docstring:"))
                 lines.append(indent(init_ds))
         elif hasattr(obj,'__call__'):
             call_ds = getdoc(obj.__call__)
             if call_ds:
-                lines.append(head("Calling Docstring:"))
+                lines.append(head("Call docstring:"))
                 lines.append(indent(call_ds))
 
         if not lines:
@@ -495,7 +494,7 @@ class Inspector:
             # 0-offset, so we must adjust.
             page.page(self.format(openpy.read_py_file(ofile, skip_encoding_cookie=False)), lineno - 1)
 
-    def _format_fields(self, fields, title_width=12):
+    def _format_fields(self, fields, title_width=0):
         """Formats a list of fields for display.
 
         Parameters
@@ -503,10 +502,12 @@ class Inspector:
         fields : list
           A list of 2-tuples: (field_title, field_content)
         title_width : int
-          How many characters to pad titles to. Default 12.
+          How many characters to pad titles to. Default to longest title.
         """
         out = []
         header = self.__head
+        if title_width == 0:
+            title_width = max(len(title) + 2 for title, _ in fields)
         for title, content in fields:
             if len(content.splitlines()) > 1:
                 title = header(title + ":") + "\n"
@@ -519,7 +520,7 @@ class Inspector:
     pinfo_fields1 = [("Type", "type_name"),
                     ]
                     
-    pinfo_fields2 = [("String Form", "string_form"),
+    pinfo_fields2 = [("String form", "string_form"),
                     ]
 
     pinfo_fields3 = [("Length", "length"),
@@ -527,8 +528,8 @@ class Inspector:
                     ("Definition", "definition"),
                     ]
 
-    pinfo_fields_obj = [("Class Docstring", "class_docstring"),
-                        ("Constructor Docstring","init_docstring"),
+    pinfo_fields_obj = [("Class docstring", "class_docstring"),
+                        ("Init docstring", "init_docstring"),
                         ("Call def", "call_def"),
                         ("Call docstring", "call_docstring")]
 
@@ -568,6 +569,9 @@ class Inspector:
             displayfields.append(("Namespace", info['namespace'].rstrip()))
 
         add_fields(self.pinfo_fields3)
+        if info['isclass'] and info['init_definition']:
+            displayfields.append(("Init definition",
+                            info['init_definition'].rstrip()))
         
         # Source or docstring, depending on detail level and whether
         # source found.
@@ -579,14 +583,9 @@ class Inspector:
 
         # Constructor info for classes
         if info['isclass']:
-            if info['init_definition'] or info['init_docstring']:
-                displayfields.append(("Constructor information", ""))
-                if info['init_definition'] is not None:
-                    displayfields.append((" Definition",
-                                    info['init_definition'].rstrip()))
-                if info['init_docstring'] is not None:
-                    displayfields.append((" Docstring",
-                                        indent(info['init_docstring'])))
+            if info['init_docstring'] is not None:
+                displayfields.append(("Init docstring",
+                                    info['init_docstring']))
 
         # Info for objects:
         else:
@@ -613,7 +612,6 @@ class Inspector:
 
         obj_type = type(obj)
 
-        header = self.__head
         if info is None:
             ismagic = 0
             isalias = 0
@@ -695,11 +693,6 @@ class Inspector:
                 fname = 'Dynamically generated function. No source code available.'
             out['file'] = fname
         
-        # reconstruct the function definition and print it:
-        defln = self._getdef(obj, oname)
-        if defln:
-            out['definition'] = self.format(defln)
-
         # Docstrings only in detail 0 mode, since source contains them (we
         # avoid repetitions).  If source fails, we add them back, see below.
         if ds and detail_level == 0:
@@ -749,6 +742,11 @@ class Inspector:
 
         # and class docstring for instances:
         else:
+            # reconstruct the function definition and print it:
+            defln = self._getdef(obj, oname)
+            if defln:
+                out['definition'] = self.format(defln)
+
             # First, check whether the instance docstring is identical to the
             # class one, and print it separately if they don't coincide.  In
             # most cases they will, but it's nice to print all the info for
@@ -778,10 +776,14 @@ class Inspector:
                 out['init_docstring'] = init_ds
 
             # Call form docstring for callable instances
-            if safe_hasattr(obj, '__call__'):
+            if safe_hasattr(obj, '__call__') and not is_simple_callable(obj):
                 call_def = self._getdef(obj.__call__, oname)
-                if call_def is not None:
-                    out['call_def'] = self.format(call_def)
+                if call_def:
+                    call_def = self.format(call_def)
+                    # it may never be the case that call def and definition differ,
+                    # but don't include the same signature twice
+                    if call_def != out.get('definition'):
+                        out['call_def'] = call_def
                 call_ds = getdoc(obj.__call__)
                 # Skip Python's auto-generated docstrings
                 if call_ds == _func_call_docstring:
@@ -803,13 +805,18 @@ class Inspector:
 
         if callable_obj:
             try:
-                args,  varargs, varkw, defaults = getargspec(callable_obj)
+                argspec = getargspec(callable_obj)
             except (TypeError, AttributeError):
                 # For extensions/builtins we can't retrieve the argspec
                 pass
             else:
-                out['argspec'] = dict(args=args, varargs=varargs,
-                                      varkw=varkw, defaults=defaults)
+                # named tuples' _asdict() method returns an OrderedDict, but we
+                # we want a normal
+                out['argspec'] = argspec_dict = dict(argspec._asdict())
+                # We called this varkw before argspec became a named tuple.
+                # With getfullargspec it's also called varkw.
+                if 'varkw' not in argspec_dict:
+                    argspec_dict['varkw'] = argspec_dict.pop('keywords')
 
         return object_info(**out)
 

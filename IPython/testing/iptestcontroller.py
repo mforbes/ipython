@@ -221,9 +221,14 @@ def run_webapp(q, ipydir, nbdir, loglevel=0):
     sys.stderr = open(os.devnull, 'w')
     server = nbapp.NotebookApp()
     args = ['--no-browser']
-    args.extend(['--ipython-dir', ipydir])
-    args.extend(['--notebook-dir', nbdir])
-    args.extend(['--log-level', str(loglevel)])
+    args.extend(['--ipython-dir', ipydir,
+                 '--notebook-dir', nbdir,
+                 '--log-level', str(loglevel),
+    ])
+    # ipc doesn't work on Windows, and darwin has crazy-long temp paths,
+    # which run afoul of ipc's maximum path length.
+    if sys.platform.startswith('linux'):
+        args.append('--KernelManager.transport=ipc')
     server.initialize(args)
     # communicate the port number to the parent process
     q.put(server.port)
@@ -458,7 +463,7 @@ def run_iptestall(options):
 
             # Reimplement the html_report method with our custom reporter
             cov._harvest_data()
-            cov.config.from_args(omit='*%stests' % os.sep, html_dir=html_dir,
+            cov.config.from_args(omit='*{0}tests{0}*'.format(os.sep), html_dir=html_dir,
                                  html_title='IPython test coverage',
                                 )
             reporter = CustomHtmlReporter(cov, cov.config)

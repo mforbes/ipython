@@ -58,6 +58,7 @@ from setupbase import (
     setup_args,
     find_packages,
     find_package_data,
+    check_package_data_first,
     find_entry_points,
     build_scripts_entrypt,
     find_data_files,
@@ -191,6 +192,7 @@ if len(sys.argv) >= 2 and sys.argv[1] in ('sdist','bdist_rpm'):
 
 packages = find_packages()
 package_data = find_package_data()
+
 data_files = find_data_files()
 
 setup_args['packages'] = packages
@@ -224,7 +226,7 @@ class UploadWindowsInstallers(upload):
             self.upload_file('bdist_wininst', 'any', dist_file)
 
 setup_args['cmdclass'] = {
-    'build_py': git_prebuild('IPython'),
+    'build_py': check_package_data_first(git_prebuild('IPython')),
     'sdist' : git_prebuild('IPython', sdist),
     'upload_wininst' : UploadWindowsInstallers,
     'submodule' : UpdateSubmodules,
@@ -271,13 +273,18 @@ extras_require = dict(
     notebook = ['tornado>=3.1', 'pyzmq>=2.1.11', 'jinja2'],
     nbconvert = ['pygments', 'jinja2', 'Sphinx>=0.3']
 )
+if sys.version_info < (3, 3):
+    extras_require['test'].append('mock')
+
 everything = set()
 for deps in extras_require.values():
     everything.update(deps)
 extras_require['all'] = everything
+
 install_requires = []
 if sys.platform == 'darwin':
-    install_requires.append('readline')
+    if any(arg.startswith('bdist') for arg in sys.argv) or not setupext.check_for_readline():
+        install_requires.append('gnureadline')
 elif sys.platform.startswith('win'):
     # Pyreadline has unicode and Python 3 fixes in 2.0
     install_requires.append('pyreadline>=2.0')

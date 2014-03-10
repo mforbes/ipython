@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from IPython.core.getipython import get_ipython
 from IPython.kernel.comm import Comm
 from IPython.config import LoggingConfigurable
-from IPython.utils.traitlets import Unicode, Dict, Instance, Bool, List, Tuple
+from IPython.utils.traitlets import Unicode, Dict, Instance, Bool, List, Tuple, Int
 from IPython.utils.py3compat import string_types
 
 #-----------------------------------------------------------------------------
@@ -102,7 +102,8 @@ class Widget(LoggingConfigurable):
         to use to represent the widget.""", sync=True)
     _comm = Instance('IPython.kernel.comm.Comm')
     
-    closed = Bool(False)
+    msg_throttle = Int(3, sync=True, help="""Maximum number of msgs the 
+        front-end can send before receiving an idle msg from the back-end.""")
     
     keys = List()
     def _keys_default(self):
@@ -161,7 +162,6 @@ class Widget(LoggingConfigurable):
         """Private close - cleanup objects, registry entries"""
         del Widget.widgets[self.model_id]
         self._comm = None
-        self.closed = True
 
     def close(self):
         """Close method.
@@ -169,7 +169,7 @@ class Widget(LoggingConfigurable):
         Closes the widget which closes the underlying comm.
         When the comm is closed, all of the widget views are automatically
         removed from the front-end."""
-        if not self.closed:
+        if self._comm is not None:
             self._comm.close()
             self._close()
 
@@ -306,7 +306,7 @@ class Widget(LoggingConfigurable):
         their model ids.  Return value must be JSON-able."""
         if isinstance(x, dict):
             return {k: self._pack_widgets(v) for k, v in x.items()}
-        elif isinstance(x, list):
+        elif isinstance(x, (list, tuple)):
             return [self._pack_widgets(v) for v in x]
         elif isinstance(x, Widget):
             return x.model_id
@@ -320,7 +320,7 @@ class Widget(LoggingConfigurable):
         their model ids."""
         if isinstance(x, dict):
             return {k: self._unpack_widgets(v) for k, v in x.items()}
-        elif isinstance(x, list):
+        elif isinstance(x, (list, tuple)):
             return [self._unpack_widgets(v) for v in x]
         elif isinstance(x, string_types):
             return x if x not in Widget.widgets else Widget.widgets[x]
@@ -410,7 +410,7 @@ class DOMWidget(Widget):
             be added to.
         """
         class_list = class_names
-        if isinstance(class_list, list):
+        if isinstance(class_list, (list, tuple)):
             class_list = ' '.join(class_list)
 
         self.send({
@@ -431,7 +431,7 @@ class DOMWidget(Widget):
             be removed from.
         """
         class_list = class_names
-        if isinstance(class_list, list):
+        if isinstance(class_list, (list, tuple)):
             class_list = ' '.join(class_list)
 
         self.send({

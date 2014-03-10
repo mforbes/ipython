@@ -95,7 +95,8 @@ def write_connection_file(fname=None, shell_port=0, iopub_port=0, stdin_port=0, 
         ip = localhost()
     # default to temporary connector file
     if not fname:
-        fname = tempfile.mktemp('.json')
+        fd, fname = tempfile.mkstemp('.json')
+        os.close(fd)
     
     # Find open ports as necessary.
     
@@ -108,6 +109,8 @@ def write_connection_file(fname=None, shell_port=0, iopub_port=0, stdin_port=0, 
     if transport == 'tcp':
         for i in range(ports_needed):
             sock = socket.socket()
+            # struct.pack('ii', (0,0)) is 8 null bytes
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, b'\0' * 8)
             sock.bind(('', 0))
             ports.append(sock)
         for i, sock in enumerate(ports):
@@ -470,7 +473,7 @@ class ConnectionFileMixin(Configurable):
 
     def write_connection_file(self):
         """Write connection info to JSON dict in self.connection_file."""
-        if self._connection_file_written:
+        if self._connection_file_written and os.path.exists(self.connection_file):
             return
 
         self.connection_file, cfg = write_connection_file(self.connection_file,

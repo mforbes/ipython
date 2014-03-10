@@ -24,6 +24,7 @@
         .border-box-sizing();
         .vbox();
         .box-flex2();
+        .align-start();
     }
 }
 
@@ -96,10 +97,11 @@
     overflow      : visible;
 
     /* Default size of the slider */
-    width      : 348px; 
-    height     : 5px;
-    max-height : 5px;
-    margin-top : 11px;
+    width        : 348px; 
+    height       : 5px;
+    max-height   : 5px;
+    margin-top   : 11px;
+    margin-bottom: 10px;
     
     /* Style the slider track */
     .slide-track();
@@ -164,7 +166,7 @@
 .widget-text {
     /* String Textbox - used for TextBoxView and TextAreaView */
     width         : 350px;
-    margin-bottom : 0px;
+    margin : 0px !important;
 }
 
 .widget-listbox {
@@ -176,6 +178,7 @@
 .widget-numeric-text {
     /* Single Line Textbox - used for IntTextView and FloatTextView */
     width : 150px;
+    margin : 0px !important;
 }
 
 .widget-progress {
@@ -256,6 +259,15 @@
 .widget-container {
     /* ContainerWidget */
     .border-box-sizing();
+    .align-start();
+}
+
+.widget-radio-box {
+    /* Contains RadioButtonsWidget */
+    .vbox();
+    .border-box-sizing();
+    
+    padding-top: 4px;
 }
 
 .docked-widget-modal {

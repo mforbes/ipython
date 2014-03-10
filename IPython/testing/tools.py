@@ -152,7 +152,9 @@ def default_config():
     config.TerminalInteractiveShell.colors = 'NoColor'
     config.TerminalTerminalInteractiveShell.term_title = False,
     config.TerminalInteractiveShell.autocall = 0
-    config.HistoryManager.hist_file = tempfile.mktemp(u'test_hist.sqlite')
+    f = tempfile.NamedTemporaryFile(suffix=u'test_hist.sqlite', delete=False)
+    config.HistoryManager.hist_file = f.name
+    f.close()
     config.HistoryManager.db_cache_size = 10000
     return config
 
@@ -211,7 +213,9 @@ def ipexec(fname, options=None):
     # Absolute path for filename
     full_fname = os.path.join(test_dir, fname)
     full_cmd = ipython_cmd + cmdargs + [full_fname]
-    p = Popen(full_cmd, stdout=PIPE, stderr=PIPE)
+    env = os.environ.copy()
+    env.pop('PYTHONWARNINGS', None)  # Avoid extraneous warnings appearing on stderr
+    p = Popen(full_cmd, stdout=PIPE, stderr=PIPE, env=env)
     out, err = p.communicate()
     out, err = py3compat.bytes_to_str(out), py3compat.bytes_to_str(err)
     # `import readline` causes 'ESC[?1034h' to be output sometimes,
@@ -327,6 +331,8 @@ else:
             s = py3compat.cast_unicode(s, encoding=DEFAULT_ENCODING)
             super(MyStringIO, self).write(s)
 
+_re_type = type(re.compile(r''))
+
 notprinted_msg = """Did not find {0!r} in printed output (on {1}):
 -------
 {2!s}
@@ -347,7 +353,7 @@ class AssertPrints(object):
     """
     def __init__(self, s, channel='stdout', suppress=True):
         self.s = s
-        if isinstance(self.s, py3compat.string_types):
+        if isinstance(self.s, (py3compat.string_types, _re_type)):
             self.s = [self.s]
         self.channel = channel
         self.suppress = suppress
@@ -366,7 +372,10 @@ class AssertPrints(object):
         setattr(sys, self.channel, self.orig_stream)
         printed = self.buffer.getvalue()
         for s in self.s:
-            assert s in printed, notprinted_msg.format(s, self.channel, printed)
+            if isinstance(s, _re_type):
+                assert s.search(printed), notprinted_msg.format(s.pattern, self.channel, printed)
+            else:
+                assert s in printed, notprinted_msg.format(s, self.channel, printed)
         return False
 
 printed_msg = """Found {0!r} in printed output (on {1}):
@@ -387,7 +396,10 @@ class AssertNotPrints(AssertPrints):
         setattr(sys, self.channel, self.orig_stream)
         printed = self.buffer.getvalue()
         for s in self.s:
-            assert s not in printed, printed_msg.format(s, self.channel, printed)
+            if isinstance(s, _re_type):
+                assert not s.search(printed), printed_msg.format(s.pattern, self.channel, printed)
+            else:
+                assert s not in printed, printed_msg.format(s, self.channel, printed)
         return False
 
 @contextmanager

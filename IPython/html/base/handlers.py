@@ -51,6 +51,17 @@ non_alphanum = re.compile(r'[^A-Za-z0-9]')
 class AuthenticatedHandler(web.RequestHandler):
     """A RequestHandler with an authenticated user."""
 
+    def set_default_headers(self):
+        headers = self.settings.get('headers', {})
+        for header_name,value in headers.items() :
+            try:
+                self.set_header(header_name, value)
+            except Exception:
+                # tornado raise Exception (not a subclass)
+                # if method is unsupported (websocket and Access-Control-Allow-Origin
+                # for example, so just ignore)
+                pass
+    
     def clear_login_cookie(self):
         self.clear_cookie(self.cookie_name)
     
@@ -120,25 +131,12 @@ class IPythonHandler(AuthenticatedHandler):
     #---------------------------------------------------------------
     
     @property
-    def ws_url(self):
-        """websocket url matching the current request
-
-        By default, this is just `''`, indicating that it should match
-        the same host, protocol, port, etc.
-        """
-        return self.settings.get('websocket_url', '')
-    
-    @property
     def mathjax_url(self):
         return self.settings.get('mathjax_url', '')
     
     @property
     def base_url(self):
         return self.settings.get('base_url', '/')
-    
-    @property
-    def base_kernel_url(self):
-        return self.settings.get('base_kernel_url', '/')
     
     #---------------------------------------------------------------
     # Manager objects
@@ -181,7 +179,6 @@ class IPythonHandler(AuthenticatedHandler):
     def template_namespace(self):
         return dict(
             base_url=self.base_url,
-            base_kernel_url=self.base_kernel_url,
             logged_in=self.logged_in,
             login_available=self.login_available,
             static_url=self.static_url,
@@ -266,6 +263,7 @@ class AuthenticatedFileHandler(IPythonHandler, web.StaticFileHandler):
         abs_path = super(AuthenticatedFileHandler, self).validate_absolute_path(root, absolute_path)
         abs_root = os.path.abspath(root)
         if is_hidden(abs_path, abs_root):
+            self.log.info("Refusing to serve hidden file, via 404 Error")
             raise web.HTTPError(404)
         return abs_path
 

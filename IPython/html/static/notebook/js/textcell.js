@@ -20,7 +20,8 @@ var IPython = (function (IPython) {
     "use strict";
 
     // TextCell base class
-    var key = IPython.utils.keycodes;
+    var keycodes = IPython.keyboard.keycodes;
+    var security = IPython.security;
 
     /**
      * Construct a new TextCell, codemirror mode is by default 'htmlmixed', and cell type is 'text'
@@ -80,8 +81,8 @@ var IPython = (function (IPython) {
         var inner_cell = $('<div/>').addClass('inner_cell');
         this.celltoolbar = new IPython.CellToolbar(this);
         inner_cell.append(this.celltoolbar.element);
-        var input_area = $('<div/>').addClass('text_cell_input border-box-sizing');
-        this.code_mirror = CodeMirror(input_area.get(0), this.cm_config);
+        var input_area = $('<div/>').addClass('input_area');
+        this.code_mirror = new CodeMirror(input_area.get(0), this.cm_config);
         // The tabindex=-1 makes this div focusable.
         var render_area = $('<div/>').addClass('text_cell_render border-box-sizing').
             addClass('rendered_html').attr('tabindex','-1');
@@ -104,8 +105,11 @@ var IPython = (function (IPython) {
         this.element.dblclick(function () {
             if (that.selected === false) {
                 $([IPython.events]).trigger('select.Cell', {'cell':that});
-            };
-            $([IPython.events]).trigger('edit_mode.Cell', {cell: that});
+            }
+            var cont = that.unrender();
+            if (cont) {
+                that.focus_editor();
+            }
         });
     };
 
@@ -137,7 +141,7 @@ var IPython = (function (IPython) {
         if (event.keyCode === 13 && (event.shiftKey || event.ctrlKey || event.altKey)) {
             // Always ignore shift-enter in CodeMirror as we handle it.
             return true;
-        } else if (event.which === key.UPARROW && event.type === 'keydown') {
+        } else if (event.which === keycodes.up && event.type === 'keydown') {
             // If we are not at the top, let CM handle the up arrow and
             // prevent the global keydown handler from handling it.
             if (!that.at_top()) {
@@ -146,7 +150,7 @@ var IPython = (function (IPython) {
             } else {
                 return true;
             };
-        } else if (event.which === key.DOWNARROW && event.type === 'keydown') {
+        } else if (event.which === keycodes.down && event.type === 'keydown') {
             // If we are not at the bottom, let CM handle the down arrow and
             // prevent the global keydown handler from handling it.
             if (!that.at_bottom()) {
@@ -155,7 +159,7 @@ var IPython = (function (IPython) {
             } else {
                 return true;
             };
-        } else if (event.which === key.ESC && event.type === 'keydown') {
+        } else if (event.which === keycodes.esc && event.type === 'keydown') {
             if (that.code_mirror.options.keyMap === "vim-insert") {
                 // vim keyMap is active and in insert mode. In this case we leave vim
                 // insert mode, but remain in notebook edit mode.
@@ -179,7 +183,7 @@ var IPython = (function (IPython) {
             if (this.mode === 'edit') {
                 this.code_mirror.refresh();
             }
-        };
+        }
         return cont;
     };
 
@@ -190,28 +194,18 @@ var IPython = (function (IPython) {
             var text_cell = this.element;
             var output = text_cell.find("div.text_cell_render");
             output.hide();
-            text_cell.find('div.text_cell_input').show();
+            text_cell.find('div.input_area').show();
             if (this.get_text() === this.placeholder) {
                 this.set_text('');
-                this.refresh();
             }
-
-        };
+            this.refresh();
+        }
         return cont;
     };
 
     TextCell.prototype.execute = function () {
         this.render();
     };
-
-    TextCell.prototype.edit_mode = function () {
-        var cont = IPython.Cell.prototype.edit_mode.apply(this);
-        if (cont) {
-            this.unrender();
-            this.focus_editor();
-        };
-        return cont;
-    }
 
     /**
      * setter: {{#crossLink "TextCell/set_text"}}{{/crossLink}}
@@ -261,8 +255,8 @@ var IPython = (function (IPython) {
                 return true;
             } else {
                 return false;
-            };
-        };
+            }
+        }
     };
 
     /**
@@ -278,8 +272,8 @@ var IPython = (function (IPython) {
                 return true;
             } else {
                 return false;
-            };
-        };
+            }
+        }
     };
 
     /**
@@ -295,6 +289,8 @@ var IPython = (function (IPython) {
                 // make this value the starting point, so that we can only undo
                 // to this state, instead of a blank cell
                 this.code_mirror.clearHistory();
+                // TODO: This HTML needs to be treated as potentially dangerous
+                // user input and should be handled before set_rendered.         
                 this.set_rendered(data.rendered || '');
                 this.rendered = false;
                 this.render();
@@ -332,7 +328,7 @@ var IPython = (function (IPython) {
             mode: 'gfm'
         },
         placeholder: "Type *Markdown* and LaTeX: $\\alpha^2$"
-    }
+    };
 
     MarkdownCell.prototype = new TextCell();
 
@@ -349,22 +345,16 @@ var IPython = (function (IPython) {
             text = text_and_math[0];
             math = text_and_math[1];
             var html = marked.parser(marked.lexer(text));
-            html = $(IPython.mathjaxutils.replace_math(html, math));
+            html = IPython.mathjaxutils.replace_math(html, math);
+            html = security.sanitize_html(html);
+            html = $(html);
             // links in markdown cells should open in new tabs
             html.find("a[href]").not('[href^="#"]').attr("target", "_blank");
-            try {
-                this.set_rendered(html);
-            } catch (e) {
-                console.log("Error running Javascript in Markdown:");
-                console.log(e);
-                this.set_rendered($("<div/>").addClass("js-error").html(
-                    "Error rendering Markdown!<br/>" + e.toString())
-                );
-            }
-            this.element.find('div.text_cell_input').hide();
+            this.set_rendered(html);
+            this.element.find('div.input_area').hide();
             this.element.find("div.text_cell_render").show();
-            this.typeset()
-        };
+            this.typeset();
+        }
         return cont;
     };
 
@@ -378,7 +368,7 @@ var IPython = (function (IPython) {
      */
     var RawCell = function (options) {
 
-        options = this.mergeopt(RawCell,options)
+        options = this.mergeopt(RawCell,options);
         TextCell.apply(this, [options]);
         this.cell_type = 'raw';
         // RawCell should always hide its rendered div
@@ -396,7 +386,7 @@ var IPython = (function (IPython) {
     /** @method bind_events **/
     RawCell.prototype.bind_events = function () {
         TextCell.prototype.bind_events.apply(this);
-        var that = this
+        var that = this;
         this.element.focusout(function() {
             that.auto_highlight();
         });
@@ -452,7 +442,7 @@ var IPython = (function (IPython) {
 
     /** @method fromJSON */
     HeadingCell.prototype.fromJSON = function (data) {
-        if (data.level != undefined){
+        if (data.level !== undefined){
             this.level = data.level;
         }
         TextCell.prototype.fromJSON.apply(this, arguments);
@@ -492,7 +482,7 @@ var IPython = (function (IPython) {
         if (this.rendered) {
             this.rendered = false;
             this.render();
-        };
+        }
     };
 
     /** The depth of header cell, based on html (h1 to h6)
@@ -528,7 +518,9 @@ var IPython = (function (IPython) {
             text = text_and_math[0];
             math = text_and_math[1];
             var html = marked.parser(marked.lexer(text));
-            var h = $(IPython.mathjaxutils.replace_math(html, math));
+            html = IPython.mathjaxutils.replace_math(html, math);
+            html = security.sanitize_html(html);
+            var h = $(html);
             // add id and linkback anchor
             var hash = h.text().replace(/ /g, '-');
             h.attr('id', hash);
@@ -538,13 +530,11 @@ var IPython = (function (IPython) {
                     .attr('href', '#' + hash)
                     .text('¶')
             );
-            
             this.set_rendered(h);
-            this.typeset();
-            this.element.find('div.text_cell_input').hide();
+            this.element.find('div.input_area').hide();
             this.element.find("div.text_cell_render").show();
-
-        };
+            this.typeset();
+        }
         return cont;
     };
 

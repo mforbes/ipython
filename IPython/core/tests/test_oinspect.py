@@ -27,6 +27,7 @@ from IPython.core.magic import (Magics, magics_class, line_magic,
                                 register_line_magic, register_cell_magic,
                                 register_line_cell_magic)
 from IPython.external.decorator import decorator
+from IPython.testing.decorators import skipif
 from IPython.utils import py3compat
 
 
@@ -45,7 +46,7 @@ ip = get_ipython()
 # defined, if any code is inserted above, the following line will need to be
 # updated.  Do NOT insert any whitespace between the next line and the function
 # definition below.
-THIS_LINE_NUMBER = 48  # Put here the actual number of this line
+THIS_LINE_NUMBER = 49  # Put here the actual number of this line
 def test_find_source_lines():
     nt.assert_equal(oinspect.find_source_lines(test_find_source_lines), 
                     THIS_LINE_NUMBER+1)
@@ -111,6 +112,10 @@ class Call(object):
     def __call__(self, *a, **kw):
         """This is the call docstring."""
 
+    def method(self, x, z=2):
+        """Some method's docstring"""
+
+class SimpleClass(object):
     def method(self, x, z=2):
         """Some method's docstring"""
 
@@ -237,7 +242,7 @@ def test_info():
     # case-insensitive comparison needed on some filesystems
     # e.g. Windows:
     nt.assert_equal(i['file'].lower(), fname.lower())
-    nt.assert_equal(i['definition'], 'Call(self, *a, **kw)\n')
+    nt.assert_equal(i['definition'], None)
     nt.assert_equal(i['docstring'], Call.__doc__)
     nt.assert_equal(i['source'], None)
     nt.assert_true(i['isclass'])
@@ -255,7 +260,7 @@ def test_info():
     nt.assert_equal(i['docstring'], "Modified instance docstring")
     nt.assert_equal(i['class_docstring'], Call.__doc__)
     nt.assert_equal(i['init_docstring'], Call.__init__.__doc__)
-    nt.assert_equal(i['call_docstring'], c.__call__.__doc__)
+    nt.assert_equal(i['call_docstring'], Call.__call__.__doc__)
 
     # Test old-style classes, which for example may not have an __init__ method.
     if not py3compat.PY3:
@@ -269,6 +274,21 @@ def test_info():
 def test_info_awkward():
     # Just test that this doesn't throw an error.
     i = inspector.info(Awkward())
+
+def test_calldef_none():
+    # We should ignore __call__ for all of these.
+    for obj in [f, SimpleClass().method, any, str.upper]:
+        print(obj)
+        i = inspector.info(obj)
+        nt.assert_is(i['call_def'], None)
+
+if py3compat.PY3:
+    exec("def f_kwarg(pos, *, kwonly): pass")
+
+@skipif(not py3compat.PY3)
+def test_definition_kwonlyargs():
+    i = inspector.info(f_kwarg, oname='f_kwarg')  # analysis:ignore
+    nt.assert_equal(i['definition'], "f_kwarg(pos, *, kwonly)\n")
 
 def test_getdoc():
     class A(object):

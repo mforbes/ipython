@@ -23,7 +23,7 @@ import nose.tools as nt
 import IPython.testing.tools as tt
 
 from IPython.extensions.autoreload import AutoreloadMagics
-from IPython.core.hooks import TryNext
+from IPython.core.events import EventManager, pre_run_cell
 from IPython.utils.py3compat import PY3
 
 if PY3:
@@ -41,16 +41,16 @@ class FakeShell(object):
 
     def __init__(self):
         self.ns = {}
+        self.events = EventManager(self, {'pre_run_cell', pre_run_cell})
         self.auto_magics = AutoreloadMagics(shell=self)
+        self.events.register('pre_run_cell', self.auto_magics.pre_run_cell)
 
     register_magics = set_hook = noop
 
     def run_code(self, code):
-        try:
-            self.auto_magics.pre_run_code_hook(self)
-        except TryNext:
-            pass
+        self.events.trigger('pre_run_cell')
         exec(code, self.ns)
+        self.auto_magics.post_execute_hook()
 
     def push(self, items):
         self.ns.update(items)
@@ -60,6 +60,7 @@ class FakeShell(object):
 
     def magic_aimport(self, parameter, stream=None):
         self.auto_magics.aimport(parameter, stream=stream)
+        self.auto_magics.post_execute_hook()
 
 
 class Fixture(object):
@@ -169,12 +170,10 @@ class Bar:    # old-style class: weakref doesn't work for it on Python < 2.7
             self.shell.magic_aimport(mod_name)
             stream = StringIO()
             self.shell.magic_aimport("", stream=stream)
-            nt.assert_true(("Modules to reload:\n%s" % mod_name) in
-                           stream.getvalue())
+            nt.assert_in(("Modules to reload:\n%s" % mod_name), stream.getvalue())
 
-            nt.assert_raises(
-                ImportError,
-                self.shell.magic_aimport, "tmpmod_as318989e89ds")
+            with nt.assert_raises(ImportError):
+                self.shell.magic_aimport("tmpmod_as318989e89ds")
         else:
             self.shell.magic_autoreload("2")
             self.shell.run_code("import %s" % mod_name)

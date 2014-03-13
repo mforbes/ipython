@@ -44,7 +44,7 @@ default_filters = {
         'ansi2html': filters.ansi2html,
         'filter_data_type': filters.DataTypeFilter,
         'get_lines': filters.get_lines,
-        'highlight2html': filters.Highlight2Html,
+        'highlight2html': filters.Highlight2HTML,
         'highlight2latex': filters.Highlight2Latex,
         'ipython2python': filters.ipython2python,
         'posix_path': filters.posix_path,
@@ -153,7 +153,6 @@ class TemplateExporter(Exporter):
         #Init
         self._init_template()
         self._init_environment(extra_loaders=extra_loaders)
-        self._init_preprocessors()
         self._init_filters()
 
 

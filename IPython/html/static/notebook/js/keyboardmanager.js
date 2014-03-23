@@ -26,7 +26,7 @@ var IPython = (function (IPython) {
                 return true;
             }
         },
-        'shift+enter' : {
+        'shift-enter' : {
             help    : 'run cell, select below',
             help_index : 'ba',
             handler : function (event) {
@@ -34,7 +34,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'ctrl+enter' : {
+        'ctrl-enter' : {
             help    : 'run cell',
             help_index : 'bb',
             handler : function (event) {
@@ -42,7 +42,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'alt+enter' : {
+        'alt-enter' : {
             help    : 'run cell, insert below',
             help_index : 'bc',
             handler : function (event) {
@@ -53,7 +53,7 @@ var IPython = (function (IPython) {
     };
 
     if (platform === 'MacOS') {
-        default_common_shortcuts['cmd+s'] =
+        default_common_shortcuts['cmd-s'] =
             {
                 help    : 'save notebook',
                 help_index : 'fb',
@@ -64,7 +64,7 @@ var IPython = (function (IPython) {
                 }
             };
     } else {
-        default_common_shortcuts['ctrl+s'] =
+        default_common_shortcuts['ctrl-s'] =
             {
                 help    : 'save notebook',
                 help_index : 'fb',
@@ -87,7 +87,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'ctrl+m' : {
+        'ctrl-m' : {
             help    : 'command mode',
             help_index : 'ab',
             handler : function (event) {
@@ -100,15 +100,21 @@ var IPython = (function (IPython) {
             help_index : '',
             handler : function (event) {
                 var index = IPython.notebook.get_selected_index();
-                if (index !== null && index !== 0) {
-                    var cell = IPython.notebook.get_cell(index);
-                    if (cell && cell.at_top()) {
-                        event.preventDefault();
-                        IPython.notebook.command_mode();
-                        IPython.notebook.select_prev();
-                        IPython.notebook.edit_mode();
-                        return false;
-                    }
+                var cell = IPython.notebook.get_cell(index);
+                if (cell && cell.at_top() && index !== 0) {
+                    event.preventDefault();
+                    IPython.notebook.command_mode();
+                    IPython.notebook.select_prev();
+                    IPython.notebook.edit_mode();
+                    var cm = IPython.notebook.get_selected_cell().code_mirror;
+                    cm.setCursor(cm.lastLine(), 0);
+                    return false;
+                } else if (cell) {
+                    var cm = cell.code_mirror;
+                    var cursor = cm.getCursor();
+                    cursor.line -= 1;
+                    cm.setCursor(cursor);
+                    return false;
                 }
             }
         },
@@ -117,19 +123,25 @@ var IPython = (function (IPython) {
             help_index : '',
             handler : function (event) {
                 var index = IPython.notebook.get_selected_index();
-                if (index !== null && index !== (IPython.notebook.ncells()-1)) {
-                    var cell = IPython.notebook.get_cell(index);
-                    if (cell && cell.at_bottom()) {
-                        event.preventDefault();
-                        IPython.notebook.command_mode();
-                        IPython.notebook.select_next();
-                        IPython.notebook.edit_mode();
-                        return false;
-                    }
+                var cell = IPython.notebook.get_cell(index);
+                if (cell.at_bottom() && index !== (IPython.notebook.ncells()-1)) {
+                    event.preventDefault();
+                    IPython.notebook.command_mode();
+                    IPython.notebook.select_next();
+                    IPython.notebook.edit_mode();
+                    var cm = IPython.notebook.get_selected_cell().code_mirror;
+                    cm.setCursor(0, 0);
+                    return false;
+                } else {
+                    var cm = cell.code_mirror;
+                    var cursor = cm.getCursor();
+                    cursor.line += 1;
+                    cm.setCursor(cursor);
+                    return false;
                 }
             }
         },
-        'alt+-' : {
+        'ctrl-shift--' : {
             help    : 'split cell',
             help_index : 'ea',
             handler : function (event) {
@@ -137,7 +149,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'alt+subtract' : {
+        'ctrl-shift-subtract' : {
             help    : '',
             help_index : 'eb',
             handler : function (event) {
@@ -149,40 +161,40 @@ var IPython = (function (IPython) {
             help    : 'indent or complete',
             help_index : 'ec',
         },
-        'shift+tab' : {
+        'shift-tab' : {
             help    : 'tooltip',
             help_index : 'ed',
         },
     };
 
     if (platform === 'MacOS') {
-        default_edit_shortcuts['cmd+/'] =
+        default_edit_shortcuts['cmd-/'] =
             {
                 help    : 'toggle comment',
                 help_index : 'ee'
             };
-        default_edit_shortcuts['cmd+]'] =
+        default_edit_shortcuts['cmd-]'] =
             {
                 help    : 'indent',
                 help_index : 'ef'
             };
-        default_edit_shortcuts['cmd+['] =
+        default_edit_shortcuts['cmd-['] =
             {
                 help    : 'dedent',
                 help_index : 'eg'
             };
     } else {
-        default_edit_shortcuts['ctrl+/'] =
+        default_edit_shortcuts['ctrl-/'] =
             {
                 help    : 'toggle comment',
                 help_index : 'ee'
             };
-        default_edit_shortcuts['ctrl+]'] =
+        default_edit_shortcuts['ctrl-]'] =
             {
                 help    : 'indent',
                 help_index : 'ef'
             };
-        default_edit_shortcuts['ctrl+['] =
+        default_edit_shortcuts['ctrl-['] =
             {
                 help    : 'dedent',
                 help_index : 'eg'
@@ -264,7 +276,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'shift+v' : {
+        'shift-v' : {
             help    : 'paste cell above',
             help_index : 'eg',
             handler : function (event) {
@@ -389,7 +401,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'shift+o' : {
+        'shift-o' : {
             help    : 'toggle output scrolling',
             help_index : 'gc',
             handler : function (event) {
@@ -405,7 +417,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'ctrl+j' : {
+        'ctrl-j' : {
             help    : 'move cell down',
             help_index : 'eb',
             handler : function (event) {
@@ -413,7 +425,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'ctrl+k' : {
+        'ctrl-k' : {
             help    : 'move cell up',
             help_index : 'ea',
             handler : function (event) {
@@ -463,7 +475,7 @@ var IPython = (function (IPython) {
                 return false;
             }
         },
-        'shift+m' : {
+        'shift-m' : {
             help    : 'merge cell below',
             help_index : 'ek',
             handler : function (event) {

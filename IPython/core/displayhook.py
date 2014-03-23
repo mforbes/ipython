@@ -100,12 +100,10 @@ class DisplayHook(Configurable):
         # do not print output if input ends in ';'
         try:
             cell = self.shell.history_manager.input_hist_parsed[self.prompt_count]
-            if cell.rstrip().endswith(';'):
-                return True
+            return cell.rstrip().endswith(';')
         except IndexError:
             # some uses of ipshellembed may fail here
-            pass
-        return False
+            return False
 
     def start_displayhook(self):
         """Start the displayhook, initializing resources."""

@@ -58,9 +58,9 @@ The code to generate the simple DAG:
 .. sourcecode:: python
 
     import networkx as nx
-    
+
     G = nx.DiGraph()
-    
+
     # add 5 nodes, labeled 0-4:
     map(G.add_node, range(5))
     # 1,2 depend on 0:
@@ -71,7 +71,7 @@ The code to generate the simple DAG:
     G.add_edge(2,3)
     # 4 depends on 1
     G.add_edge(1,4)
-    
+
     # now draw the graph:
     pos = { 0 : (0,0), 1 : (1,1), 2 : (-1,1),
             3 : (0,2), 4 : (2,2)}
@@ -81,7 +81,7 @@ The code to generate the simple DAG:
 For demonstration purposes, we have a function that generates a random DAG with a given
 number of nodes and edges.
 
-.. literalinclude:: ../../../examples/parallel/dagdeps.py
+.. literalinclude:: ../../../examples/Parallel Computing/dagdeps.py
     :language: python
     :lines: 20-36
 
@@ -96,11 +96,11 @@ Now, we need to build our dict of jobs corresponding to the nodes on the graph:
 .. sourcecode:: ipython
 
     In [3]: jobs = {}
-    
+
     # in reality, each job would presumably be different
     # randomwait is just a function that sleeps for a random interval
     In [4]: for node in G:
-       ...:     jobs[node] = randomwait 
+       ...:     jobs[node] = randomwait
 
 Once we have a dict of jobs matching the nodes on the graph, we can start submitting jobs,
 and linking up the dependencies. Since we don't know a job's msg_id until it is submitted,
@@ -114,10 +114,10 @@ on which it depends:
 
     In [5]: rc = Client()
     In [5]: view = rc.load_balanced_view()
-    
+
     In [6]: results = {}
-    
-    In [7]: for node in G.topological_sort():
+
+    In [7]: for node in nx.topological_sort(G):
        ...:    # get list of AsyncResult objects from nodes
        ...:    # leading into this one as dependencies
        ...:    deps = [ results[n] for n in G.predecessors(node) ]
@@ -140,7 +140,7 @@ These objects store a variety of metadata about each task, including various tim
 We can validate that the dependencies were respected by checking that each task was
 started after all of its predecessors were completed:
 
-.. literalinclude:: ../../../examples/parallel/dagdeps.py
+.. literalinclude:: ../../../examples/Parallel Computing/dagdeps.py
     :language: python
     :lines: 64-70
 
@@ -152,18 +152,18 @@ will be at the top, and quick, small tasks will be at the bottom.
 .. sourcecode:: ipython
 
     In [10]: from matplotlib.dates import date2num
-    
+
     In [11]: from matplotlib.cm import gist_rainbow
-    
+
     In [12]: pos = {}; colors = {}
-    
+
     In [12]: for node in G:
        ....:    md = results[node].metadata
        ....:    start = date2num(md.started)
        ....:    runtime = date2num(md.completed) - start
        ....:    pos[node] = (start, runtime)
        ....:    colors[node] = md.engine_id
-    
+
     In [13]: nx.draw(G, pos, node_list=colors.keys(), node_color=colors.values(),
        ....:    cmap=gist_rainbow)
 

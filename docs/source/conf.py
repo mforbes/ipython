@@ -68,12 +68,12 @@ templates_path = ['_templates']
 # The suffix of source filenames.
 source_suffix = '.rst'
 
-if iprelease['_version_extra']:
+if iprelease['_version_extra'] == 'dev':
     rst_prolog = """
     .. note::
 
         This documentation is for a development version of IPython. There may be
-        significant differences from the latest stable release (1.2.1).
+        significant differences from the latest stable release.
 
     """
 
@@ -82,7 +82,7 @@ master_doc = 'index'
 
 # General substitutions.
 project = 'IPython'
-copyright = '2008, The IPython Development Team'
+copyright = 'The IPython Development Team'
 
 # ghissue config
 github_project_url = "https://github.com/ipython/ipython"
@@ -95,8 +95,7 @@ numpydoc_class_members_toctree = False
 # other places throughout the built documents.
 #
 # The full version, including alpha/beta/rc tags.
-codename = iprelease['codename']
-release = "%s: %s" % (iprelease['version'], codename)
+release = "%s" % iprelease['version']
 # Just the X.Y.Z part, no '-dev'
 version = iprelease['version'].split('-', 1)[0]
 
@@ -110,9 +109,10 @@ today_fmt = '%B %d, %Y'
 # List of documents that shouldn't be included in the build.
 #unused_docs = []
 
-# List of directories, relative to source directories, that shouldn't be searched
-# for source files.
-exclude_dirs = ['attic']
+# Exclude these glob-style patterns when looking for source files. They are
+# relative to the source/ directory.
+exclude_patterns = ['whatsnew/pr']
+
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
 #add_function_parentheses = True
@@ -164,7 +164,10 @@ html_last_updated_fmt = '%b %d, %Y'
 # Additional templates that should be rendered to pages, maps page names to
 # template names.
 html_additional_pages = {
-                         'interactive/htmlnotebook': 'htmlnotebook.html',
+    'interactive/htmlnotebook': 'notebook_redirect.html',
+    'interactive/notebook': 'notebook_redirect.html',
+    'interactive/nbconvert': 'notebook_redirect.html',
+    'interactive/public_server': 'notebook_redirect.html',
 }
 
 # If false, no module index is generated.

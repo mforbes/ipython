@@ -6,16 +6,9 @@ test suite.
 
 """
 
-#-----------------------------------------------------------------------------
-#  Copyright (C) 2009-2011  The IPython Development Team
-#
-#  Distributed under the terms of the BSD License.  The full license is in
-#  the file COPYING, distributed as part of this software.
-#-----------------------------------------------------------------------------
+# Copyright (c) IPython Development Team.
+# Distributed under the terms of the Modified BSD License.
 
-#-----------------------------------------------------------------------------
-# Imports
-#-----------------------------------------------------------------------------
 from __future__ import print_function
 
 import argparse
@@ -34,6 +27,24 @@ from IPython.utils.py3compat import bytes_to_str
 from IPython.utils.sysinfo import get_sys_info
 from IPython.utils.tempdir import TemporaryDirectory
 
+try:
+    # Python >= 3.3
+    from subprocess import TimeoutExpired
+    def popen_wait(p, timeout):
+        return p.wait(timeout)
+except ImportError:
+    class TimeoutExpired(Exception):
+        pass
+    def popen_wait(p, timeout):
+        """backport of Popen.wait from Python 3"""
+        for i in range(int(10 * timeout)):
+            if p.poll() is not None:
+                return
+            time.sleep(0.1)
+        if p.poll() is None:
+            raise TimeoutExpired
+
+NOTEBOOK_SHUTDOWN_TIMEOUT = 10
 
 class TestController(object):
     """Run tests in a subprocess
@@ -197,15 +208,17 @@ def get_js_test_dir():
 def all_js_groups():
     import glob
     test_dir = get_js_test_dir()
-    all_subdirs = glob.glob(test_dir + '*/')
-    return [js_prefix+os.path.relpath(x, test_dir) for x in all_subdirs if os.path.relpath(x, test_dir) != '__pycache__']
+    all_subdirs = glob.glob(test_dir + '[!_]*/')
+    return [js_prefix+os.path.relpath(x, test_dir) for x in all_subdirs]
 
 class JSController(TestController):
     """Run CasperJS tests """
-    def __init__(self, section):
+    requirements =  ['zmq', 'tornado', 'jinja2', 'casperjs', 'sqlite3']
+    def __init__(self, section, enabled=True):
         """Create new test runner."""
         TestController.__init__(self)
         self.section = section
+        self.enabled = enabled
         js_test_dir = get_js_test_dir()
         includes = '--includes=' + os.path.join(js_test_dir,'util.js')
         test_cases = os.path.join(js_test_dir, self.section[len(js_prefix):])
@@ -233,7 +246,7 @@ class JSController(TestController):
 
     @property
     def will_run(self):
-        return all(have[a] for a in ['zmq', 'tornado', 'jinja2', 'casperjs', 'sqlite3'])
+        return self.enabled and all(have[a] for a in self.requirements)
 
     def _init_server(self):
         "Start the notebook server in a separate process"
@@ -261,8 +274,14 @@ class JSController(TestController):
             if self.server.poll() is not None:
                 return self._failed_to_start()
             if os.path.exists(self.server_info_file):
-                self._load_server_info()
-                return
+                try:
+                    self._load_server_info()
+                except ValueError:
+                    # If the server is halfway through writing the file, we may
+                    # get invalid JSON; it should be ready next iteration.
+                    pass
+                else:
+                    return
             time.sleep(0.1)
         print("Notebook server-info file never arrived: %s" % self.server_info_file,
             file=sys.stderr
@@ -287,7 +306,27 @@ class JSController(TestController):
         except OSError:
             # already dead
             pass
-        self.server.wait()
+        # wait 10s for the server to shutdown
+        try:
+            popen_wait(self.server, NOTEBOOK_SHUTDOWN_TIMEOUT)
+        except TimeoutExpired:
+            # server didn't terminate, kill it
+            try:
+                print("Failed to terminate notebook server, killing it.",
+                    file=sys.stderr
+                )
+                self.server.kill()
+            except OSError:
+                # already dead
+                pass
+        # wait another 10s
+        try:
+            popen_wait(self.server, NOTEBOOK_SHUTDOWN_TIMEOUT)
+        except TimeoutExpired:
+            print("Notebook server still running (%s)" % self.server_info_file,
+                file=sys.stderr
+            )
+            
         self.stream_capturer.halt()
         TestController.cleanup(self)
 
@@ -304,13 +343,15 @@ def prepare_controllers(options):
             js_testgroups = all_js_groups()
         else:
             js_testgroups = [g for g in testgroups if g not in py_testgroups]
+        js_enabled = len(js_testgroups) > 0
     else:
         py_testgroups = py_test_group_names
         js_testgroups = all_js_groups()
         if not options.all:
+            js_enabled = False
             test_sections['parallel'].enabled = False
 
-    c_js = [JSController(name) for name in js_testgroups]
+    c_js = [JSController(name, js_enabled) for name in js_testgroups]
     c_py = [PyTestController(name, options) for name in py_testgroups]
 
     controllers = c_py + c_js

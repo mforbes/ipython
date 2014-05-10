@@ -15,11 +15,9 @@ Authors:
 #-----------------------------------------------------------------------------
 # Imports
 #-----------------------------------------------------------------------------
-import os
-
 from tornado import web
 from ..base.handlers import IPythonHandler, notebook_path_regex, path_regex
-from ..utils import url_path_join, path2url, url2path, url_escape, is_hidden
+from ..utils import url_path_join, url_escape
 
 #-----------------------------------------------------------------------------
 # Handlers
@@ -44,7 +42,7 @@ class TreeHandler(IPythonHandler):
         if len(comps) > 3:
             for i in range(len(comps)-2):
                 comps.pop(0)
-        page_title = url_escape(url_path_join(*comps))
+        page_title = url_path_join(*comps)
         if page_title:
             return page_title+'/'
         else:

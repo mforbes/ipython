@@ -28,7 +28,6 @@ Authors:
 #-----------------------------------------------------------------------------
 
 import atexit
-import errno
 import glob
 import logging
 import os
@@ -39,7 +38,7 @@ from IPython.config.application import Application, catch_config_error
 from IPython.config.loader import ConfigFileNotFound
 from IPython.core import release, crashhandler
 from IPython.core.profiledir import ProfileDir, ProfileDirError
-from IPython.utils.path import get_ipython_dir, get_ipython_package_dir
+from IPython.utils.path import get_ipython_dir, get_ipython_package_dir, ensure_dir_exists
 from IPython.utils import py3compat
 from IPython.utils.traitlets import List, Unicode, Type, Bool, Dict, Set, Instance
 
@@ -220,20 +219,18 @@ class BaseIPythonApplication(Application):
             sys.getfilesystemencoding()
         )
         sys.path.append(str_path)
-        if not os.path.isdir(new):
-            os.makedirs(new, mode=0o777)
+        ensure_dir_exists(new)
         readme = os.path.join(new, 'README')
         readme_src = os.path.join(get_ipython_package_dir(), u'config', u'profile', 'README')
         if not os.path.exists(readme) and os.path.exists(readme_src):
             shutil.copy(readme_src, readme)
         for d in ('extensions', 'nbextensions'):
             path = os.path.join(new, d)
-            if not os.path.exists(path):
-                try:
-                    os.mkdir(path)
-                except OSError as e:
-                    if e.errno != errno.EEXIST:
-                        self.log.error("couldn't create path %s: %s", path, e)
+            try:
+                ensure_dir_exists(path)
+            except OSError:
+                # this will not be EEXIST
+                self.log.error("couldn't create path %s: %s", path, e)
         self.log.debug("IPYTHONDIR set to: %s" % new)
 
     def load_config_file(self, suppress_errors=True):

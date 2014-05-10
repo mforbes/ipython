@@ -10,12 +10,7 @@
 #  the file COPYING, distributed as part of this software.
 #-----------------------------------------------------------------------------
 
-#-----------------------------------------------------------------------------
-# Imports
-#-----------------------------------------------------------------------------
-
-from __future__ import absolute_import
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 
 import __future__
 import abc
@@ -57,6 +52,7 @@ from IPython.core.payload import PayloadManager
 from IPython.core.prefilter import PrefilterManager
 from IPython.core.profiledir import ProfileDir
 from IPython.core.prompts import PromptManager
+from IPython.core.usage import default_banner
 from IPython.lib.latextools import LaTeXTool
 from IPython.testing.skipdoctest import skip_doctest
 from IPython.utils import PyColorize
@@ -66,7 +62,7 @@ from IPython.utils import openpy
 from IPython.utils.decorators import undoc
 from IPython.utils.io import ask_yes_no
 from IPython.utils.ipstruct import Struct
-from IPython.utils.path import get_home_dir, get_ipython_dir, get_py_filename, unquote_filename
+from IPython.utils.path import get_home_dir, get_ipython_dir, get_py_filename, unquote_filename, ensure_dir_exists
 from IPython.utils.pickleshare import PickleShareDB
 from IPython.utils.process import system, getoutput
 from IPython.utils.py3compat import (builtin_mod, unicode_type, string_types,
@@ -233,6 +229,16 @@ class InteractiveShell(SingletonConfigurable):
         Enable magic commands to be called without the leading %.
         """
     )
+    
+    banner = Unicode('')
+    
+    banner1 = Unicode(default_banner, config=True,
+        help="""The part of the banner to be printed before the profile"""
+    )
+    banner2 = Unicode('', config=True,
+        help="""The part of the banner to be printed after the profile"""
+    )
+
     cache_size = Integer(1000, config=True, help=
         """
         Set the size of the output cache.  The default is 1000, you can
@@ -524,8 +530,7 @@ class InteractiveShell(SingletonConfigurable):
     #-------------------------------------------------------------------------
 
     def _ipython_dir_changed(self, name, new):
-        if not os.path.isdir(new):
-            os.makedirs(new, mode = 0o777)
+        ensure_dir_exists(new)
 
     def set_autoindent(self,value=None):
         """Set the autoindent flag, checking for readline support.
@@ -773,6 +778,24 @@ class InteractiveShell(SingletonConfigurable):
         if self._orig_sys_modules_main_mod is not None:
             sys.modules[self._orig_sys_modules_main_name] = self._orig_sys_modules_main_mod
 
+    #-------------------------------------------------------------------------
+    # Things related to the banner
+    #-------------------------------------------------------------------------
+    
+    @property
+    def banner(self):
+        banner = self.banner1
+        if self.profile and self.profile != 'default':
+            banner += '\nIPython profile: %s\n' % self.profile
+        if self.banner2:
+            banner += '\n' + self.banner2
+        return banner
+
+    def show_banner(self, banner=None):
+        if banner is None:
+            banner = self.banner
+        self.write(banner)
+    
     #-------------------------------------------------------------------------
     # Things related to hooks
     #-------------------------------------------------------------------------
@@ -1503,6 +1526,7 @@ class InteractiveShell(SingletonConfigurable):
             return 'not found'  # so callers can take other action
 
     def object_inspect(self, oname, detail_level=0):
+        """Get object info about oname"""
         with self.builtin_trap:
             info = self._object_find(oname)
             if info.found:
@@ -1511,6 +1535,17 @@ class InteractiveShell(SingletonConfigurable):
                 )
             else:
                 return oinspect.object_info(name=oname, found=False)
+
+    def object_inspect_text(self, oname, detail_level=0):
+        """Get object info as formatted text"""
+        with self.builtin_trap:
+            info = self._object_find(oname)
+            if info.found:
+                return self.inspector._format_info(info.obj, oname, info=info,
+                            detail_level=detail_level
+                )
+            else:
+                raise KeyError(oname)
 
     #-------------------------------------------------------------------------
     # Things related to history management
@@ -2396,7 +2431,7 @@ class InteractiveShell(SingletonConfigurable):
     def _user_obj_error(self):
         """return simple exception dict
         
-        for use in user_variables / expressions
+        for use in user_expressions
         """
         
         etype, evalue, tb = self._get_exc_info()
@@ -2414,7 +2449,7 @@ class InteractiveShell(SingletonConfigurable):
     def _format_user_obj(self, obj):
         """format a user object to display dict
         
-        for use in user_expressions / variables
+        for use in user_expressions
         """
         
         data, md = self.display_formatter.format(obj)
@@ -2425,30 +2460,6 @@ class InteractiveShell(SingletonConfigurable):
         }
         return value
     
-    def user_variables(self, names):
-        """Get a list of variable names from the user's namespace.
-
-        Parameters
-        ----------
-        names : list of strings
-          A list of names of variables to be read from the user namespace.
-
-        Returns
-        -------
-        A dict, keyed by the input names and with the rich mime-type repr(s) of each value.
-        Each element will be a sub-dict of the same form as a display_data message.
-        """
-        out = {}
-        user_ns = self.user_ns
-        
-        for varname in names:
-            try:
-                value = self._format_user_obj(user_ns[varname])
-            except:
-                value = self._user_obj_error()
-            out[varname] = value
-        return out
-
     def user_expressions(self, expressions):
         """Evaluate a dict of expressions in the user's namespace.
 
@@ -2601,7 +2612,7 @@ class InteractiveShell(SingletonConfigurable):
                     # raised in user code.  It would be nice if there were
                     # versions of run_cell that did raise, so
                     # we could catch the errors.
-                    self.run_cell(cell, store_history=False, shell_futures=False)
+                    self.run_cell(cell, silent=True, shell_futures=False)
             except:
                 self.showtraceback()
                 warn('Unknown failure executing file: <%s>' % fname)
@@ -3089,7 +3100,7 @@ class InteractiveShell(SingletonConfigurable):
         lines = self.history_manager.get_range_by_str(range_str, raw=raw)
         return "\n".join(x for _, _, x in lines)
 
-    def find_user_code(self, target, raw=True, py_only=False, skip_encoding_cookie=True):
+    def find_user_code(self, target, raw=True, py_only=False, skip_encoding_cookie=True, search_ns=False):
         """Get a code string from history, file, url, or a string or macro.
 
         This is mainly used by magic functions.
@@ -3156,11 +3167,18 @@ class InteractiveShell(SingletonConfigurable):
             elif os.path.isdir(os.path.expanduser(tgt)):
                 raise ValueError("'%s' is a directory, not a regular file." % target)
 
+        if search_ns:
+            # Inspect namespace to load object source
+            object_info = self.object_inspect(target, detail_level=1)
+            if object_info['found'] and object_info['source']:
+                return object_info['source']
+
         try:                                              # User namespace
             codeobj = eval(target, self.user_ns)
         except Exception:
             raise ValueError(("'%s' was not found in history, as a file, url, "
                                 "nor in the user namespace.") % target)
+
         if isinstance(codeobj, string_types):
             return codeobj
         elif isinstance(codeobj, Macro):

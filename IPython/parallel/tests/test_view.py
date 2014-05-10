@@ -1,20 +1,8 @@
 # -*- coding: utf-8 -*-
-"""test View objects
+"""test View objects"""
 
-Authors:
-
-* Min RK
-"""
-#-------------------------------------------------------------------------------
-#  Copyright (C) 2011  The IPython Development Team
-#
-#  Distributed under the terms of the BSD License.  The full license is in
-#  the file COPYING, distributed as part of this software.
-#-------------------------------------------------------------------------------
-
-#-------------------------------------------------------------------------------
-# Imports
-#-------------------------------------------------------------------------------
+# Copyright (c) IPython Development Team.
+# Distributed under the terms of the Modified BSD License.
 
 import base64
 import sys
@@ -347,6 +335,11 @@ class TestView(ClusterTestCase):
         r = view.map_sync(f, data)
         self.assertEqual(r, list(map(f, data)))
     
+    def test_map_empty_sequence(self):
+        view = self.client[:]
+        r = view.map_sync(lambda x: x, [])
+        self.assertEqual(r, [])
+    
     def test_map_iterable(self):
         """test map on iterables (direct)"""
         view = self.client[:]
@@ -544,7 +537,7 @@ class TestView(ClusterTestCase):
         ar = e0.execute("5", silent=False)
         er = ar.get()
         self.assertEqual(str(er), "<ExecuteReply[%i]: 5>" % er.execution_count)
-        self.assertEqual(er.pyout['data']['text/plain'], '5')
+        self.assertEqual(er.execute_result['data']['text/plain'], '5')
 
     def test_execute_reply_rich(self):
         e0 = self.client[self.client.ids[0]]
@@ -565,21 +558,21 @@ class TestView(ClusterTestCase):
         er = ar.get()
         self.assertEqual(er.stdout.strip(), '5')
         
-    def test_execute_pyout(self):
-        """execute triggers pyout with silent=False"""
+    def test_execute_result(self):
+        """execute triggers execute_result with silent=False"""
         view = self.client[:]
         ar = view.execute("5", silent=False, block=True)
         
         expected = [{'text/plain' : '5'}] * len(view)
-        mimes = [ out['data'] for out in ar.pyout ]
+        mimes = [ out['data'] for out in ar.execute_result ]
         self.assertEqual(mimes, expected)
     
     def test_execute_silent(self):
-        """execute does not trigger pyout with silent=True"""
+        """execute does not trigger execute_result with silent=True"""
         view = self.client[:]
         ar = view.execute("5", block=True)
         expected = [None] * len(view)
-        self.assertEqual(ar.pyout, expected)
+        self.assertEqual(ar.execute_result, expected)
     
     def test_execute_magic(self):
         """execute accepts IPython commands"""

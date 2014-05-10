@@ -126,13 +126,13 @@ def display(*objs, **kwargs):
             else:
                 continue
         if raw:
-            publish_display_data('display', obj, metadata)
+            publish_display_data(data=obj, metadata=metadata)
         else:
             format_dict, md_dict = format(obj, include=include, exclude=exclude)
             if metadata:
                 # kwarg-specified metadata gets precedence
                 _merge(md_dict, metadata)
-            publish_display_data('display', format_dict, md_dict)
+            publish_display_data(data=format_dict, metadata=md_dict)
 
 
 def display_pretty(*objs, **kwargs):
@@ -167,6 +167,24 @@ def display_html(*objs, **kwargs):
         Metadata to be associated with the specific mimetype output.
     """
     _display_mimetype('text/html', objs, **kwargs)
+
+
+def display_markdown(*objs, **kwargs):
+    """Displays the Markdown representation of an object.
+
+    Parameters
+    ----------
+    objs : tuple of objects
+        The Python objects to display, or if raw=True raw markdown data to
+        display.
+    raw : bool
+        Are the data objects raw data or Python objects that need to be
+        formatted before display? [default: False]
+    metadata : dict (optional)
+        Metadata to be associated with the specific mimetype output.
+    """
+
+    _display_mimetype('text/markdown', objs, **kwargs)
 
 
 def display_svg(*objs, **kwargs):
@@ -299,6 +317,7 @@ class DisplayObject(object):
     """An object that wraps data to be displayed."""
 
     _read_flags = 'r'
+    _show_mem_addr = False
 
     def __init__(self, data=None, url=None, filename=None):
         """Create a display object given raw data.
@@ -335,7 +354,15 @@ class DisplayObject(object):
 
         self.reload()
         self._check_data()
-    
+
+    def __repr__(self):
+        if not self._show_mem_addr:
+            cls = self.__class__
+            r = "<%s.%s object>" % (cls.__module__, cls.__name__)
+        else:
+            r = super(DisplayObject, self).__repr__()
+        return r
+
     def _check_data(self):
         """Override in subclasses if there's something to check."""
         pass
@@ -390,6 +417,12 @@ class HTML(TextDisplayObject):
         special characters (<>&) escaped.
         """
         return self._repr_html_()
+
+
+class Markdown(TextDisplayObject):
+
+    def _repr_markdown_(self):
+        return self.data
 
 
 class Math(TextDisplayObject):

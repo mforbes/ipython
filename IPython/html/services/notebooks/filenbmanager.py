@@ -1,21 +1,7 @@
-"""A notebook manager that uses the local file system for storage.
+"""A notebook manager that uses the local file system for storage."""
 
-Authors:
-
-* Brian Granger
-* Zach Sailer
-"""
-
-#-----------------------------------------------------------------------------
-#  Copyright (C) 2011  The IPython Development Team
-#
-#  Distributed under the terms of the BSD License.  The full license is in
-#  the file COPYING, distributed as part of this software.
-#-----------------------------------------------------------------------------
-
-#-----------------------------------------------------------------------------
-# Imports
-#-----------------------------------------------------------------------------
+# Copyright (c) IPython Development Team.
+# Distributed under the terms of the Modified BSD License.
 
 import io
 import os
@@ -26,6 +12,7 @@ from tornado import web
 
 from .nbmanager import NotebookManager
 from IPython.nbformat import current
+from IPython.utils.path import ensure_dir_exists
 from IPython.utils.traitlets import Unicode, Bool, TraitError
 from IPython.utils.py3compat import getcwd
 from IPython.utils import tz
@@ -80,31 +67,15 @@ class FileNotebookManager(NotebookManager):
             return
         if not os.path.exists(new) or not os.path.isdir(new):
             raise TraitError("notebook dir %r is not a directory" % new)
-
-    checkpoint_dir = Unicode(config=True,
-        help="""The location in which to keep notebook checkpoints
+    
+    checkpoint_dir = Unicode('.ipynb_checkpoints', config=True,
+        help="""The directory name in which to keep notebook checkpoints
         
-        By default, it is notebook-dir/.ipynb_checkpoints
+        This is a path relative to the notebook's own directory.
+        
+        By default, it is .ipynb_checkpoints
         """
     )
-    def _checkpoint_dir_default(self):
-        return os.path.join(self.notebook_dir, '.ipynb_checkpoints')
-    
-    def _checkpoint_dir_changed(self, name, old, new):
-        """do a bit of validation of the checkpoint dir"""
-        if not os.path.isabs(new):
-            # If we receive a non-absolute path, make it absolute.
-            abs_new = os.path.abspath(new)
-            self.checkpoint_dir = abs_new
-            return
-        if os.path.exists(new) and not os.path.isdir(new):
-            raise TraitError("checkpoint dir %r is not a directory" % new)
-        if not os.path.exists(new):
-            self.log.info("Creating checkpoint dir %s", new)
-            try:
-                os.mkdir(new)
-            except:
-                raise TraitError("Couldn't create checkpoint dir %r" % new)
     
     def _copy(self, src, dest):
         """copy src to dest
@@ -456,7 +427,10 @@ class FileNotebookManager(NotebookManager):
             checkpoint_id=checkpoint_id,
             ext=self.filename_ext,
         )
-        cp_path = os.path.join(path, self.checkpoint_dir, filename)
+        os_path = self._get_os_path(path=path)
+        cp_dir = os.path.join(os_path, self.checkpoint_dir)
+        ensure_dir_exists(cp_dir)
+        cp_path = os.path.join(cp_dir, filename)
         return cp_path
 
     def get_checkpoint_model(self, checkpoint_id, name, path=''):
@@ -481,8 +455,6 @@ class FileNotebookManager(NotebookManager):
         checkpoint_id = u"checkpoint"
         cp_path = self.get_checkpoint_path(checkpoint_id, name, path)
         self.log.debug("creating checkpoint for notebook %s", name)
-        if not os.path.exists(self.checkpoint_dir):
-            os.mkdir(self.checkpoint_dir)
         self._copy(nb_path, cp_path)
         
         # return the checkpoint info
@@ -495,8 +467,8 @@ class FileNotebookManager(NotebookManager):
         """
         path = path.strip('/')
         checkpoint_id = "checkpoint"
-        path = self.get_checkpoint_path(checkpoint_id, name, path)
-        if not os.path.exists(path):
+        os_path = self.get_checkpoint_path(checkpoint_id, name, path)
+        if not os.path.exists(os_path):
             return []
         else:
             return [self.get_checkpoint_model(checkpoint_id, name, path)]
@@ -532,3 +504,7 @@ class FileNotebookManager(NotebookManager):
     
     def info_string(self):
         return "Serving notebooks from local directory: %s" % self.notebook_dir
+
+    def get_kernel_path(self, name, path='', model=None):
+        """ Return the path to start kernel in """
+        return os.path.join(self.notebook_dir, path)

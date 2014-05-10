@@ -21,9 +21,7 @@ import os
 from tornado import web
 
 from IPython.kernel.multikernelmanager import MultiKernelManager
-from IPython.utils.traitlets import (
-    Dict, List, Unicode,
-)
+from IPython.utils.traitlets import List, Unicode, TraitError
 
 from IPython.html.utils import to_os_path
 from IPython.utils.py3compat import getcwd
@@ -40,7 +38,7 @@ class MappingKernelManager(MultiKernelManager):
         return "IPython.kernel.ioloop.IOLoopKernelManager"
 
     kernel_argv = List(Unicode)
-    
+
     root_dir = Unicode(getcwd(), config=True)
 
     def _root_dir_changed(self, name, old, new):
@@ -60,9 +58,13 @@ class MappingKernelManager(MultiKernelManager):
         """notice that a kernel died"""
         self.log.warn("Kernel %s died, removing from map.", kernel_id)
         self.remove_kernel(kernel_id)
-    
+
     def cwd_for_path(self, path):
         """Turn API path into absolute OS path."""
+        # short circuit for NotebookManagers that pass in absolute paths
+        if os.path.exists(path):
+            return path
+
         os_path = to_os_path(path, self.root_dir)
         # in the case of notebooks and kernels not being on the same filesystem,
         # walk up to root_dir if the paths don't exist
@@ -77,7 +79,7 @@ class MappingKernelManager(MultiKernelManager):
         ----------
         kernel_id : uuid
             The uuid to associate the new kernel with. If this
-            is not None, this kernel will be persistent whenever it is 
+            is not None, this kernel will be persistent whenever it is
             requested.
         path : API path
             The API path (unicode, '/' delimited) for the cwd.

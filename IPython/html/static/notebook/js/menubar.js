@@ -1,9 +1,5 @@
-//----------------------------------------------------------------------------
-//  Copyright (C) 2008-2011  The IPython Development Team
-//
-//  Distributed under the terms of the BSD License.  The full license is in
-//  the file COPYING, distributed as part of this software.
-//----------------------------------------------------------------------------
+// Copyright (c) IPython Development Team.
+// Distributed under the terms of the Modified BSD License.
 
 //============================================================================
 // MenuBar
@@ -123,6 +119,10 @@ var IPython = (function (IPython) {
 
         this.element.find('#download_rst').click(function () {
             that._nbconvert('rst', true);
+        });
+
+        this.element.find('#download_pdf').click(function () {
+            that._nbconvert('pdf', true);
         });
 
         this.element.find('#rename_notebook').click(function () {
@@ -280,9 +280,13 @@ var IPython = (function (IPython) {
             IPython.notebook.restart_kernel();
         });
         // Help
-        this.element.find('#notebook_tour').click(function () {
-            IPython.tour.start();
-        });
+        if (IPython.tour) {
+            this.element.find('#notebook_tour').click(function () {
+                IPython.tour.start();
+            });
+        } else {
+            this.element.find('#notebook_tour').addClass("disabled");
+        }
         this.element.find('#keyboard_shortcuts').click(function () {
             IPython.quick_help.show_keyboard_shortcuts();
         });

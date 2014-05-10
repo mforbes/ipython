@@ -7,10 +7,7 @@ from tornado import web
 from ..base.handlers import IPythonHandler, notebook_path_regex
 from IPython.nbformat.current import to_notebook_json
 
-from IPython.utils import tz
 from IPython.utils.py3compat import cast_bytes
-
-import sys
 
 def find_resource_files(output_files_dir):
     files = []
@@ -73,7 +70,7 @@ class NbconvertFileHandler(IPythonHandler):
     @web.authenticated
     def get(self, format, path='', name=None):
         
-        exporter = get_exporter(format, config=self.config)
+        exporter = get_exporter(format, config=self.config, log=self.log)
         
         path = path.strip('/')
         model = self.notebook_manager.get_notebook(name=name, path=path)

@@ -1,9 +1,5 @@
-//----------------------------------------------------------------------------
-//  Copyright (C) 2008-2011  The IPython Development Team
-//
-//  Distributed under the terms of the BSD License.  The full license is in
-//  the file COPYING, distributed as part of this software.
-//----------------------------------------------------------------------------
+// Copyright (c) IPython Development Team.
+// Distributed under the terms of the Modified BSD License.
 
 //============================================================================
 // Kernel
@@ -35,6 +31,7 @@ var IPython = (function (IPython) {
         this.username = "username";
         this.session_id = utils.uuid();
         this._msg_callbacks = {};
+        this.post = $.post;
 
         if (typeof(WebSocket) !== 'undefined') {
             this.WebSocket = WebSocket;
@@ -48,6 +45,9 @@ var IPython = (function (IPython) {
         this.init_iopub_handlers();
         this.comm_manager = new IPython.CommManager(this);
         this.widget_manager = new IPython.WidgetManager(this.comm_manager);
+        
+        this.last_msg_id = null;
+        this.last_msg_callbacks = {};
     };
 
 
@@ -57,7 +57,8 @@ var IPython = (function (IPython) {
                 msg_id : utils.uuid(),
                 username : this.username,
                 session : this.session_id,
-                msg_type : msg_type
+                msg_type : msg_type,
+                version : "5.0"
             },
             metadata : metadata || {},
             content : content,
@@ -76,13 +77,13 @@ var IPython = (function (IPython) {
     // Initialize the iopub handlers
     
     Kernel.prototype.init_iopub_handlers = function () {
-        var output_types = ['stream', 'display_data', 'pyout', 'pyerr'];
+        var output_msg_types = ['stream', 'display_data', 'execute_result', 'error'];
         this._iopub_handlers = {};
         this.register_iopub_handler('status', $.proxy(this._handle_status_message, this));
         this.register_iopub_handler('clear_output', $.proxy(this._handle_clear_output, this));
         
-        for (var i=0; i < output_types.length; i++) {
-            this.register_iopub_handler(output_types[i], $.proxy(this._handle_output_message, this));
+        for (var i=0; i < output_msg_types.length; i++) {
+            this.register_iopub_handler(output_msg_types[i], $.proxy(this._handle_output_message, this));
         }
     };
 
@@ -94,7 +95,7 @@ var IPython = (function (IPython) {
         params = params || {};
         if (!this.running) {
             var qs = $.param(params);
-            $.post(utils.url_join_encode(this.kernel_service_url) + '?' + qs,
+            this.post(utils.url_join_encode(this.kernel_service_url) + '?' + qs,
                 $.proxy(this._kernel_started, this),
                 'json'
             );
@@ -113,7 +114,7 @@ var IPython = (function (IPython) {
         $([IPython.events]).trigger('status_restarting.Kernel', {kernel: this});
         if (this.running) {
             this.stop_channels();
-            $.post(utils.url_join_encode(this.kernel_url, "restart"),
+            this.post(utils.url_join_encode(this.kernel_url, "restart"),
                 $.proxy(this._kernel_started, this),
                 'json'
             );
@@ -246,7 +247,7 @@ var IPython = (function (IPython) {
      * Get kernel info
      *
      * @param callback {function}
-     * @method object_info
+     * @method kernel_info
      *
      * When calling this method, pass a callback function that expects one argument.
      * The callback will be passed the complete `kernel_info_reply` message documented
@@ -263,28 +264,27 @@ var IPython = (function (IPython) {
     /**
      * Get info on an object
      *
-     * @param objname {string}
+     * @param code {string}
+     * @param cursor_pos {integer}
      * @param callback {function}
-     * @method object_info
+     * @method inspect
      *
      * When calling this method, pass a callback function that expects one argument.
-     * The callback will be passed the complete `object_info_reply` message documented
+     * The callback will be passed the complete `inspect_reply` message documented
      * [here](http://ipython.org/ipython-doc/dev/development/messaging.html#object-information)
      */
-    Kernel.prototype.object_info = function (objname, callback) {
+    Kernel.prototype.inspect = function (code, cursor_pos, callback) {
         var callbacks;
         if (callback) {
             callbacks = { shell : { reply : callback } };
         }
         
-        if (typeof(objname) !== null && objname !== null) {
-            var content = {
-                oname : objname.toString(),
-                detail_level : 0,
-            };
-            return this.send_shell_message("object_info_request", content, callbacks);
-        }
-        return;
+        var content = {
+            code : code,
+            cursor_pos : cursor_pos,
+            detail_level : 0,
+        };
+        return this.send_shell_message("inspect_request", content, callbacks);
     };
 
     /**
@@ -302,7 +302,6 @@ var IPython = (function (IPython) {
      * @param {object} [options]
      *      @param [options.silent=false] {Boolean}
      *      @param [options.user_expressions=empty_dict] {Dict}
-     *      @param [options.user_variables=empty_list] {List od Strings}
      *      @param [options.allow_stdin=false] {Boolean} true|false
      *
      * @example
@@ -312,7 +311,6 @@ var IPython = (function (IPython) {
      *
      *      options = {
      *        silent : true,
-     *        user_variables : [],
      *        user_expressions : {},
      *        allow_stdin : false
      *      }
@@ -342,7 +340,6 @@ var IPython = (function (IPython) {
             code : code,
             silent : true,
             store_history : false,
-            user_variables : [],
             user_expressions : {},
             allow_stdin : false
         };
@@ -363,21 +360,19 @@ var IPython = (function (IPython) {
      * [here](http://ipython.org/ipython-doc/dev/development/messaging.html#complete)
      *
      * @method complete
-     * @param line {integer}
+     * @param code {string}
      * @param cursor_pos {integer}
      * @param callback {function}
      *
      */
-    Kernel.prototype.complete = function (line, cursor_pos, callback) {
+    Kernel.prototype.complete = function (code, cursor_pos, callback) {
         var callbacks;
         if (callback) {
             callbacks = { shell : { reply : callback } };
         }
         var content = {
-            text : '',
-            line : line,
-            block : null,
-            cursor_pos : cursor_pos
+            code : code,
+            cursor_pos : cursor_pos,
         };
         return this.send_shell_message("complete_request", content, callbacks);
     };
@@ -386,7 +381,7 @@ var IPython = (function (IPython) {
     Kernel.prototype.interrupt = function () {
         if (this.running) {
             $([IPython.events]).trigger('status_interrupting.Kernel', {kernel: this});
-            $.post(utils.url_join_encode(this.kernel_url, "interrupt"));
+            this.post(utils.url_join_encode(this.kernel_url, "interrupt"));
         }
     };
 
@@ -396,7 +391,8 @@ var IPython = (function (IPython) {
             this.running = false;
             var settings = {
                 cache : false,
-                type : "DELETE"
+                type : "DELETE",
+                error : utils.log_ajax_error,
             };
             $.ajax(utils.url_join_encode(this.kernel_url), settings);
         }
@@ -427,13 +423,37 @@ var IPython = (function (IPython) {
 
     Kernel.prototype.get_callbacks_for_msg = function (msg_id) {
         // get callbacks for a specific message
-        return this._msg_callbacks[msg_id];
+        if (msg_id == this.last_msg_id) {
+            return this.last_msg_callbacks;
+        } else {
+            return this._msg_callbacks[msg_id];
+        }
     };
 
 
     Kernel.prototype.clear_callbacks_for_msg = function (msg_id) {
         if (this._msg_callbacks[msg_id] !== undefined ) {
             delete this._msg_callbacks[msg_id];
+        }
+    };
+    
+    Kernel.prototype._finish_shell = function (msg_id) {
+        var callbacks = this._msg_callbacks[msg_id];
+        if (callbacks !== undefined) {
+            callbacks.shell_done = true;
+            if (callbacks.iopub_done) {
+                this.clear_callbacks_for_msg(msg_id);
+            }
+        }
+    };
+
+    Kernel.prototype._finish_iopub = function (msg_id) {
+        var callbacks = this._msg_callbacks[msg_id];
+        if (callbacks !== undefined) {
+            callbacks.iopub_done = true;
+            if (callbacks.shell_done) {
+                this.clear_callbacks_for_msg(msg_id);
+            }
         }
     };
     
@@ -445,13 +465,17 @@ var IPython = (function (IPython) {
     
      */
     Kernel.prototype.set_callbacks_for_msg = function (msg_id, callbacks) {
+        this.last_msg_id = msg_id;
         if (callbacks) {
             // shallow-copy mapping, because we will modify it at the top level
-            var cbcopy = this._msg_callbacks[msg_id] = {};
+            var cbcopy = this._msg_callbacks[msg_id] = this.last_msg_callbacks = {};
             cbcopy.shell = callbacks.shell;
             cbcopy.iopub = callbacks.iopub;
             cbcopy.input = callbacks.input;
-            this._msg_callbacks[msg_id] = cbcopy;
+            cbcopy.shell_done = (!callbacks.shell);
+            cbcopy.iopub_done = (!callbacks.iopub);
+        } else {
+            this.last_msg_callbacks = {};
         }
     };
 
@@ -468,12 +492,8 @@ var IPython = (function (IPython) {
         }
         var shell_callbacks = callbacks.shell;
         
-        // clear callbacks on shell
-        delete callbacks.shell;
-        delete callbacks.input;
-        if (!callbacks.iopub) {
-            this.clear_callbacks_for_msg(parent_id);
-        }
+        // signal that shell callbacks are done
+        this._finish_shell(parent_id);
         
         if (shell_callbacks.reply !== undefined) {
             shell_callbacks.reply(reply);
@@ -514,14 +534,11 @@ var IPython = (function (IPython) {
         if (execution_state === 'busy') {
             $([IPython.events]).trigger('status_busy.Kernel', {kernel: this});
         } else if (execution_state === 'idle') {
-            // clear callbacks on idle, there can be no more
-            if (callbacks !== undefined) {
-                delete callbacks.iopub;
-                delete callbacks.input;
-                if (!callbacks.shell) {
-                    this.clear_callbacks_for_msg(parent_id);
-                }
-            }
+            // signal that iopub callbacks are (probably) done
+            // async output may still arrive,
+            // but only for the most recent request
+            this._finish_iopub(parent_id);
+            
             // trigger status_idle event
             $([IPython.events]).trigger('status_idle.Kernel', {kernel: this});
         } else if (execution_state === 'restarting') {
@@ -551,7 +568,7 @@ var IPython = (function (IPython) {
     };
 
 
-    // handle an output message (pyout, display_data, etc.)
+    // handle an output message (execute_result, display_data, etc.)
     Kernel.prototype._handle_output_message = function (msg) {
         var callbacks = this.get_callbacks_for_msg(msg.parent_header.msg_id);
         if (!callbacks || !callbacks.iopub) {

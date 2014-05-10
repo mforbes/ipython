@@ -1,20 +1,13 @@
-#-----------------------------------------------------------------------------
-# Copyright (c) 2010, IPython Development Team.
-#
+# Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
-#
-# The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
 
-# Standard libary imports.
 from base64 import decodestring
 import os
 import re
 
-# System libary imports.
 from IPython.external.qt import QtCore, QtGui
 
-# Local imports
+from IPython.utils.path import ensure_dir_exists
 from IPython.utils.traitlets import Bool
 from IPython.qt.svg import save_svg, svg_to_clipboard, svg_to_image
 from .ipython_widget import IPythonWidget
@@ -105,12 +98,12 @@ class RichIPythonWidget(IPythonWidget):
 
         Shared code for some the following if statement
         """
-        self.log.debug("pyout: %s", msg.get('content', ''))
+        self.log.debug("execute_result: %s", msg.get('content', ''))
         self._append_plain_text(self.output_sep, True)
         self._append_html(self._make_out_prompt(prompt_number), True)
         self._append_plain_text('\n', True)
 
-    def _handle_pyout(self, msg):
+    def _handle_execute_result(self, msg):
         """ Overridden to handle rich data types, like SVG.
         """
         if not self._hidden and self._is_from_this_session(msg):
@@ -135,7 +128,7 @@ class RichIPythonWidget(IPythonWidget):
                 self._append_html(self.output_sep2, True)
             else:
                 # Default back to the plain text representation.
-                return super(RichIPythonWidget, self)._handle_pyout(msg)
+                return super(RichIPythonWidget, self)._handle_execute_result(msg)
 
     def _handle_display_data(self, msg):
         """ Overridden to handle rich data types, like SVG.
@@ -233,8 +226,7 @@ class RichIPythonWidget(IPythonWidget):
                 return "<b>Couldn't find image %s</b>" % match.group("name")
 
             if path is not None:
-                if not os.path.exists(path):
-                    os.mkdir(path)
+                ensure_dir_exists(path)
                 relpath = os.path.basename(path)
                 if image.save("%s/qt_img%s.%s" % (path, match.group("name"), format),
                               "PNG"):

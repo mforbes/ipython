@@ -1,24 +1,15 @@
-"""
-Contains writer for writing nbconvert output to filesystem.
-"""
-#-----------------------------------------------------------------------------
-#Copyright (c) 2013, the IPython Development Team.
-#
-#Distributed under the terms of the Modified BSD License.
-#
-#The full license is in the file COPYING.txt, distributed with this software.
-#-----------------------------------------------------------------------------
+"""Contains writer for writing nbconvert output to filesystem."""
 
-#-----------------------------------------------------------------------------
-# Imports
-#-----------------------------------------------------------------------------
+# Copyright (c) IPython Development Team.
+# Distributed under the terms of the Modified BSD License.
 
 import io
 import os
 import glob
 
 from IPython.utils.traitlets import Unicode
-from IPython.utils.path import link_or_copy
+from IPython.utils.path import link_or_copy, ensure_dir_exists
+from IPython.utils.py3compat import unicode_type
 
 from .base import WriterBase
 
@@ -37,8 +28,8 @@ class FilesWriter(WriterBase):
 
     # Make sure that the output directory exists.
     def _build_directory_changed(self, name, old, new):
-        if new and not os.path.isdir(new):
-            os.makedirs(new)
+        if new:
+            ensure_dir_exists(new)
 
 
     def __init__(self, **kw):
@@ -48,9 +39,9 @@ class FilesWriter(WriterBase):
     
     def _makedir(self, path):
         """Make a directory if it doesn't already exist"""
-        if path and not os.path.isdir(path):
+        if path:
             self.log.info("Making directory %s", path)
-            os.makedirs(path)
+            ensure_dir_exists(path)
 
     def write(self, output, resources, notebook_name=None, **kw):
             """
@@ -110,6 +101,11 @@ class FilesWriter(WriterBase):
 
             # Write conversion results.
             self.log.info("Writing %i bytes to %s", len(output), dest)
-            with io.open(dest, 'w', encoding='utf-8') as f:
-                f.write(output)
+            if isinstance(output, unicode_type):
+                with io.open(dest, 'w', encoding='utf-8') as f:
+                    f.write(output)
+            else:
+                with io.open(dest, 'wb') as f:
+                    f.write(output)
+                
             return dest

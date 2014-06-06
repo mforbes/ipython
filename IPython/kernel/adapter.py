@@ -13,7 +13,7 @@ def code_to_line(code, cursor_pos):
     """Turn a multiline code block and cursor position into a single line
     and new cursor position.
     
-    For adapting complete_ and object_info_requests.
+    For adapting ``complete_`` and ``object_info_request``.
     """
     for line in code.splitlines(True):
         n = len(line)
@@ -45,7 +45,7 @@ class Adapter(object):
             msg['msg_type'] = header['msg_type'] = self.msg_type_map[msg_type]
         return msg
     
-    def handle_reply_status_error(msg):
+    def handle_reply_status_error(self, msg):
         """This will be called *instead of* the regular handler
         
         on any reply with status != ok

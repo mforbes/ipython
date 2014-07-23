@@ -1,44 +1,22 @@
-//----------------------------------------------------------------------------
-//  Copyright (C) 2013 The IPython Development Team
-//
-//  Distributed under the terms of the BSD License.  The full license is in
-//  the file COPYING, distributed as part of this software.
-//----------------------------------------------------------------------------
+// Copyright (c) IPython Development Team.
+// Distributed under the terms of the Modified BSD License.
 
-//============================================================================
-// ContainerWidget
-//============================================================================
+define([
+    "widgets/js/widget",
+    "jqueryui",
+    "bootstrap",
+], function(widget, $){
 
-/**
- * @module IPython
- * @namespace IPython
- **/
-
-define(["widgets/js/widget"], function(WidgetManager) {
-
-    var ContainerView = IPython.DOMWidgetView.extend({
+    var ContainerView = widget.DOMWidgetView.extend({
         render: function(){
             // Called when view is rendered.
             this.$el.addClass('widget-container')
                 .addClass('vbox');
-            this.children={};
-            this.update_children([], this.model.get('_children'));
-            this.model.on('change:_children', function(model, value, options) {
-                this.update_children(model.previous('_children'), value);
+            this.update_children([], this.model.get('children'));
+            this.model.on('change:children', function(model, value, options) {
+                this.update_children(model.previous('children'), value);
             }, this);
             this.update();
-
-            // Trigger model displayed events for any models that are child to 
-            // this model when this model is displayed.
-            var that = this;
-            this.model.on('displayed', function(){
-                that.is_displayed = true;
-                for (var property in that.child_views) {
-                    if (that.child_views.hasOwnProperty(property)) {
-                        that.child_views[property].model.trigger('displayed');
-                    }
-                }
-            });
         },
         
         update_children: function(old_list, new_list) {
@@ -51,8 +29,7 @@ define(["widgets/js/widget"], function(WidgetManager) {
 
         remove_child_model: function(model) {
             // Called when a model is removed from the children list.
-            this.child_views[model.id].remove();
-            this.delete_child_view(model);
+            this.pop_child_view(model).remove();
         },
 
         add_child_model: function(model) {
@@ -60,10 +37,10 @@ define(["widgets/js/widget"], function(WidgetManager) {
             var view = this.create_child_view(model);
             this.$el.append(view.$el);
 
-            // Trigger the displayed event if this model is displayed.
-            if (this.is_displayed) {
-                model.trigger('displayed');
-            }
+            // Trigger the displayed event once this view is displayed.
+            this.after_displayed(function() {
+                view.trigger('displayed');
+            });
         },
         
         update: function(){
@@ -75,13 +52,11 @@ define(["widgets/js/widget"], function(WidgetManager) {
         },
     });
     
-    WidgetManager.register_widget_view('ContainerView', ContainerView);
-    
-    var PopupView = IPython.DOMWidgetView.extend({
+
+    var PopupView = widget.DOMWidgetView.extend({
         render: function(){
             // Called when view is rendered.
             var that = this;
-            this.children={};
             
             this.$el.on("remove", function(){
                     that.$backdrop.remove();
@@ -187,22 +162,11 @@ define(["widgets/js/widget"], function(WidgetManager) {
             this._shown_once = false;
             this.popped_out = true;
 
-            this.update_children([], this.model.get('_children'));
-            this.model.on('change:_children', function(model, value, options) {
-                this.update_children(model.previous('_children'), value);
+            this.update_children([], this.model.get('children'));
+            this.model.on('change:children', function(model, value, options) {
+                this.update_children(model.previous('children'), value);
             }, this);
             this.update();
-
-            // Trigger model displayed events for any models that are child to 
-            // this model when this model is displayed.
-            this.model.on('displayed', function(){
-                that.is_displayed = true;
-                for (var property in that.child_views) {
-                    if (that.child_views.hasOwnProperty(property)) {
-                        that.child_views[property].model.trigger('displayed');
-                    }
-                }
-            });
         },
         
         hide: function() {
@@ -257,8 +221,7 @@ define(["widgets/js/widget"], function(WidgetManager) {
 
         remove_child_model: function(model) {
             // Called when a child is removed from children list.
-            this.child_views[model.id].remove();
-            this.delete_child_view(model);
+            this.pop_child_view(model).remove();
         },
 
         add_child_model: function(model) {
@@ -266,10 +229,10 @@ define(["widgets/js/widget"], function(WidgetManager) {
             var view = this.create_child_view(model);
             this.$body.append(view.$el);
 
-            // Trigger the displayed event if this model is displayed.
-            if (this.is_displayed) {
-                model.trigger('displayed');
-            }
+            // Trigger the displayed event once this view is displayed.
+            this.after_displayed(function() {
+                view.trigger('displayed');
+            });
         },
         
         update: function(){
@@ -321,5 +284,9 @@ define(["widgets/js/widget"], function(WidgetManager) {
             }
         },
     });
-    WidgetManager.register_widget_view('PopupView', PopupView);
+
+    return {
+        'ContainerView': ContainerView,
+        'PopupView': PopupView,
+    };
 });

@@ -1,23 +1,12 @@
-//----------------------------------------------------------------------------
-//  Copyright (C) 2013 The IPython Development Team
-//
-//  Distributed under the terms of the BSD License.  The full license is in
-//  the file COPYING, distributed as part of this software.
-//----------------------------------------------------------------------------
-
-//============================================================================
-// Base Widget Model and View classes
-//============================================================================
-
-/**
- * @module IPython
- * @namespace IPython
- **/
+// Copyright (c) IPython Development Team.
+// Distributed under the terms of the Modified BSD License.
 
 define(["widgets/js/manager",
         "underscore",
-        "backbone"], 
-function(WidgetManager, _, Backbone){
+        "backbone", 
+        "jquery",   
+        "base/js/namespace",
+], function(widgetmanager, _, Backbone, $, IPython){
 
     var WidgetModel = Backbone.Model.extend({
         constructor: function (widget_manager, model_id, comm) {
@@ -83,7 +72,6 @@ function(WidgetManager, _, Backbone){
                     break;
                 case 'display':
                     this.widget_manager.display_view(msg, this);
-                    this.trigger('displayed');
                     break;
             }
         },
@@ -222,20 +210,20 @@ function(WidgetManager, _, Backbone){
 
         _pack_models: function(value) {
             // Replace models with model ids recursively.
+            var that = this;
+            var packed;
             if (value instanceof Backbone.Model) {
-                return value.id;
+                return "IPY_MODEL_" + value.id;
 
             } else if ($.isArray(value)) {
-                var packed = [];
-                var that = this;
+                packed = [];
                 _.each(value, function(sub_value, key) {
                     packed.push(that._pack_models(sub_value));
                 });
                 return packed;
 
             } else if (value instanceof Object) {
-                var packed = {};
-                var that = this;
+                packed = {};
                 _.each(value, function(sub_value, key) {
                     packed[key] = that._pack_models(sub_value);
                 });
@@ -248,34 +236,36 @@ function(WidgetManager, _, Backbone){
 
         _unpack_models: function(value) {
             // Replace model ids with models recursively.
+            var that = this;
+            var unpacked;
             if ($.isArray(value)) {
-                var unpacked = [];
-                var that = this;
+                unpacked = [];
                 _.each(value, function(sub_value, key) {
                     unpacked.push(that._unpack_models(sub_value));
                 });
                 return unpacked;
 
             } else if (value instanceof Object) {
-                var unpacked = {};
-                var that = this;
+                unpacked = {};
                 _.each(value, function(sub_value, key) {
                     unpacked[key] = that._unpack_models(sub_value);
                 });
                 return unpacked;
 
+            } else if (typeof value === 'string' && value.slice(0,10) === "IPY_MODEL_") {
+		var model = this.widget_manager.get_model(value.slice(10, value.length));
+		if (model) {
+		    return model;
+		} else {
+		    return value;
+		}
             } else {
-                var model = this.widget_manager.get_model(value);
-                if (model) {
-                    return model;
-                } else {
                     return value;
-                }
             }
         },
 
     });
-    WidgetManager.register_widget_model('WidgetModel', WidgetModel);
+    widgetmanager.WidgetManager.register_widget_model('WidgetModel', WidgetModel);
 
 
     var WidgetView = Backbone.View.extend({
@@ -283,8 +273,13 @@ function(WidgetManager, _, Backbone){
             // Public constructor.
             this.model.on('change',this.update,this);
             this.options = parameters.options;
-            this.child_views = [];
+            this.child_model_views = {};
+            this.child_views = {};
             this.model.views.push(this);
+            this.id = this.id || IPython.utils.uuid();
+            this.on('displayed', function() { 
+                this.is_displayed = true; 
+            }, this);
         },
 
         update: function(){
@@ -302,19 +297,39 @@ function(WidgetManager, _, Backbone){
             // TODO: this is hacky, and makes the view depend on this cell attribute and widget manager behavior
             // it would be great to have the widget manager add the cell metadata
             // to the subview without having to add it here.
-            var child_view = this.model.widget_manager.create_view(child_model, options || {}, this);
-            this.child_views[child_model.id] = child_view;
+            options = $.extend({ parent: this }, options || {});
+            var child_view = this.model.widget_manager.create_view(child_model, options, this);
+            
+            // Associate the view id with the model id.
+            if (this.child_model_views[child_model.id] === undefined) {
+                this.child_model_views[child_model.id] = [];
+            }
+            this.child_model_views[child_model.id].push(child_view.id);
+
+            // Remember the view by id.
+            this.child_views[child_view.id] = child_view;
             return child_view;
         },
 
-        delete_child_view: function(child_model, options) {
+        pop_child_view: function(child_model) {
             // Delete a child view that was previously created using create_child_view.
-            var view = this.child_views[child_model.id];
-            if (view !== undefined) {
-                delete this.child_views[child_model.id];
-                view.remove();
+            var view_ids = this.child_model_views[child_model.id];
+            if (view_ids !== undefined) {
+
+                // Only delete the first view in the list.
+                var view_id = view_ids[0];
+                var view = this.child_views[view_id];
+                delete this.child_views[view_id];
+                view_ids.splice(0,1);
                 child_model.views.pop(view);
+            
+                // Remove the view list specific to this model if it is empty.
+                if (view_ids.length === 0) {
+                    delete this.child_model_views[child_model.id];
+                }
+                return view;
             }
+            return null;
         },
 
         do_diff: function(old_list, new_list, removed_callback, added_callback) {
@@ -330,16 +345,23 @@ function(WidgetManager, _, Backbone){
             // added_callback : Callback(item)
             //      Callback that is called for each item added.
 
+            // Walk the lists until an unequal entry is found.
+            var i;
+            for (i = 0; i < new_list.length; i++) {
+                if (i < old_list.length || new_list[i] !== old_list[i]) {
+                    break;
+                }
+            }
 
-            // removed items
-            _.each(_.difference(old_list, new_list), function(item, index, list) {
-                removed_callback(item);
-            }, this);
+            // Remove the non-matching items from the old list.
+            for (var j = i; j < old_list.length; j++) {
+                removed_callback(old_list[j]);
+            }
 
-            // added items
-            _.each(_.difference(new_list, old_list), function(item, index, list) {
-                added_callback(item);
-            }, this);
+            // Add the rest of the new list items.
+            for (i; i < new_list.length; i++) {
+                added_callback(new_list[i]);
+            }
         },
 
         callbacks: function(){
@@ -353,6 +375,14 @@ function(WidgetManager, _, Backbone){
             // By default, this is only called the first time the view is created
         },
 
+        show: function(){
+            // Show the widget-area
+            if (this.options && this.options.cell &&
+                this.options.cell.widget_area !== undefined) {
+                this.options.cell.widget_area.show();
+            }
+        },
+
         send: function (content) {
             // Send a custom msg associated with this view.
             this.model.send(content, this.callbacks());
@@ -360,6 +390,16 @@ function(WidgetManager, _, Backbone){
 
         touch: function () {
             this.model.save_changes(this.callbacks());
+        },
+
+        after_displayed: function (callback, context) {
+            // Calls the callback right away is the view is already displayed
+            // otherwise, register the callback to the 'displayed' event.
+            if (this.is_displayed) {
+                callback.apply(context);
+            } else {
+                this.on('displayed', callback, context);
+            }
         },
     });
 
@@ -373,6 +413,7 @@ function(WidgetManager, _, Backbone){
             this.model.on('change', this.update, this);
             this.model.on('msg:custom', this.on_msg, this);
             DOMWidgetView.__super__.initialize.apply(this, arguments);
+            this.on('displayed', this.show, this);
         },
         
         on_msg: function(msg) {
@@ -443,10 +484,14 @@ function(WidgetManager, _, Backbone){
         },
     });
 
-    IPython.WidgetModel = WidgetModel;
-    IPython.WidgetView = WidgetView;
-    IPython.DOMWidgetView = DOMWidgetView;
+    var widget = {
+        'WidgetModel': WidgetModel,
+        'WidgetView': WidgetView,
+        'DOMWidgetView': DOMWidgetView,
+    };
 
-    // Pass through WidgetManager namespace.
-    return WidgetManager;
+    // For backwards compatability.
+    $.extend(IPython, widget);
+
+    return widget;
 });

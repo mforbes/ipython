@@ -78,7 +78,6 @@ define([
         var inner_cell = $('<div/>').addClass('inner_cell');
         this.celltoolbar = new celltoolbar.CellToolbar({
             cell: this, 
-            events: this.events, 
             notebook: this.notebook});
         inner_cell.append(this.celltoolbar.element);
         var input_area = $('<div/>').addClass('input_area');
@@ -370,23 +369,6 @@ define([
         var data = TextCell.prototype.toJSON.apply(this);
         data.level = this.get_level();
         return data;
-    };
-
-    /**
-     * can the cell be split into two cells
-     * @method is_splittable
-     **/
-    HeadingCell.prototype.is_splittable = function () {
-        return false;
-    };
-
-
-    /**
-     * can the cell be merged with other cells
-     * @method is_mergeable
-     **/
-    HeadingCell.prototype.is_mergeable = function () {
-        return false;
     };
 
     /**

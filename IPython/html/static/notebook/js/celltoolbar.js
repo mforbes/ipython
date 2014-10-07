@@ -17,6 +17,9 @@ define([
         //          events: $(Events) instance 
         //          cell: Cell instance
         //          notebook: Notebook instance 
+        //
+        //  TODO: This leaks, when cell are deleted
+        //  There is still a reference to each celltoolbars. 
         CellToolbar._instances.push(this);
         this.notebook = options.notebook;
         this.cell = options.cell;
@@ -277,7 +280,7 @@ define([
         }
 
         // If there are no controls or the cell is a rendered TextCell hide the toolbar.
-        if (!this.ui_controls_list.length || (this.cell.cell_type != 'code' && this.cell.rendered)) {
+        if (!this.ui_controls_list.length) {
             this.hide();
         } else {
             this.show();
@@ -347,6 +350,37 @@ define([
 
 
     /**
+     * A utility function to generate bindings between a input field and cell/metadata
+     * @method utils.input_ui_generator
+     * @static
+     *
+     * @param name {string} Label in front of the input field
+     * @param setter {function( cell, newValue )}
+     *        A setter method to set the newValue
+     * @param getter {function( cell )}
+     *        A getter methods which return the current value.
+     *
+     * @return callback {function( div, cell )} Callback to be passed to `register_callback`
+     *
+     */
+    CellToolbar.utils.input_ui_generator = function(name, setter, getter){
+        return function(div, cell, celltoolbar) {
+            var button_container = $(div);
+
+            var text = $('<input/>').attr('type', 'text');
+            var lbl = $('<label/>').append($('<span/>').text(name));
+            lbl.append(text);
+            text.attr("value", getter(cell));
+
+            text.keyup(function(){
+                setter(cell, text.val());
+            });
+            button_container.append($('<span/>').append(lbl));
+            IPython.keyboard_manager.register_events(text);
+        };
+    };
+
+    /**
      * A utility function to generate bindings between a dropdown list cell
      * @method utils.select_ui_generator
      * @static
@@ -394,7 +428,7 @@ define([
         return function(div, cell, celltoolbar) {
             var button_container = $(div);
             var lbl = $("<label/>").append($('<span/>').text(label));
-            var select = $('<select/>').addClass('ui-widget ui-widget-content');
+            var select = $('<select/>');
             for(var i=0; i < list_list.length; i++){
                 var opt = $('<option/>')
                     .attr('value', list_list[i][1])

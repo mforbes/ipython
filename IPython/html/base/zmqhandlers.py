@@ -42,23 +42,33 @@ class ZMQStreamHandler(websocket.WebSocketHandler):
         host = self.request.headers.get("Host")
 
         # If no header is provided, assume we can't verify origin
-        if(origin is None or host is None):
+        if origin is None:
+            self.log.warn("Missing Origin header, rejecting WebSocket connection.")
+            return False
+        if host is None:
+            self.log.warn("Missing Host header, rejecting WebSocket connection.")
             return False
         
-        host_origin = "{0}://{1}".format(self.request.protocol, host)
+        origin = origin.lower()
+        origin_host = urlparse(origin).netloc
         
         # OK if origin matches host
-        if origin == host_origin:
+        if origin_host == host:
             return True
         
         # Check CORS headers
         if self.allow_origin:
-            return self.allow_origin == origin
+            allow = self.allow_origin == origin
         elif self.allow_origin_pat:
-            return bool(self.allow_origin_pat.match(origin))
+            allow = bool(self.allow_origin_pat.match(origin))
         else:
             # No CORS headers deny the request
-            return False
+            allow = False
+        if not allow:
+            self.log.warn("Blocking Cross Origin WebSocket Attempt.  Origin: %s, Host: %s",
+                origin, host,
+            )
+        return allow
 
     def clear_cookie(self, *args, **kwargs):
         """meaningless for websockets"""
@@ -109,6 +119,26 @@ WS_PING_INTERVAL = 30000
 
 class AuthenticatedZMQStreamHandler(ZMQStreamHandler, IPythonHandler):
     ping_callback = None
+    last_ping = 0
+    last_pong = 0
+    
+    @property
+    def ping_interval(self):
+        """The interval for websocket keep-alive pings.
+        
+        Set ws_ping_interval = 0 to disable pings.
+        """
+        return self.settings.get('ws_ping_interval', WS_PING_INTERVAL)
+    
+    @property
+    def ping_timeout(self):
+        """If no ping is received in this many milliseconds,
+        close the websocket connection (VPNs, etc. can fail to cleanly close ws connections).
+        Default is max of 3 pings or 30 seconds.
+        """
+        return self.settings.get('ws_ping_timeout',
+            max(3 * self.ping_interval, WS_PING_INTERVAL)
+        )
 
     def set_default_headers(self):
         """Undo the set_default_headers in IPythonHandler
@@ -123,22 +153,40 @@ class AuthenticatedZMQStreamHandler(ZMQStreamHandler, IPythonHandler):
         # Tornado 4 already does CORS checking
         if tornado.version_info[0] < 4:
             if not self.check_origin(self.get_origin()):
-                self.log.warn("Cross Origin WebSocket Attempt from %s", self.get_origin())
                 raise web.HTTPError(403)
 
         self.session = Session(config=self.config)
         self.save_on_message = self.on_message
         self.on_message = self.on_first_message
-        self.ping_callback = ioloop.PeriodicCallback(self.send_ping, WS_PING_INTERVAL)
-        self.ping_callback.start()
+        
+        # start the pinging
+        if self.ping_interval > 0:
+            self.last_ping = ioloop.IOLoop.instance().time()  # Remember time of last ping
+            self.last_pong = self.last_ping
+            self.ping_callback = ioloop.PeriodicCallback(self.send_ping, self.ping_interval)
+            self.ping_callback.start()
 
     def send_ping(self):
         """send a ping to keep the websocket alive"""
         if self.stream.closed() and self.ping_callback is not None:
             self.ping_callback.stop()
             return
+        
+        # check for timeout on pong.  Make sure that we really have sent a recent ping in
+        # case the machine with both server and client has been suspended since the last ping.
+        now = ioloop.IOLoop.instance().time()
+        since_last_pong = 1e3 * (now - self.last_pong)
+        since_last_ping = 1e3 * (now - self.last_ping)
+        if since_last_ping < 2*self.ping_interval and since_last_pong > self.ping_timeout:
+            self.log.warn("WebSocket ping timeout after %i ms.", since_last_pong)
+            self.close()
+            return
 
         self.ping(b'')
+        self.last_ping = now
+
+    def on_pong(self, data):
+        self.last_pong = ioloop.IOLoop.instance().time()
 
     def _inject_cookie_message(self, msg):
         """Inject the first message, which is the document cookie,

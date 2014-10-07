@@ -3,13 +3,14 @@
 
 define([
     'base/js/namespace',
+    'base/js/utils',
     'jquery',
     'notebook/js/cell',
     'base/js/security',
     'notebook/js/mathjaxutils',
     'notebook/js/celltoolbar',
     'components/marked/lib/marked',
-], function(IPython, $, cell, security, mathjaxutils, celltoolbar, marked) {
+], function(IPython, utils, $, cell, security, mathjaxutils, celltoolbar, marked) {
     "use strict";
     var Cell = cell.Cell;
 
@@ -40,7 +41,7 @@ define([
         var cm_overwrite_options  = {
             onKeyEvent: $.proxy(this.handle_keyevent,this)
         };
-        var config = this.mergeopt(TextCell, this.config, {cm_config:cm_overwrite_options});
+        var config = utils.mergeopt(TextCell, this.config, {cm_config:cm_overwrite_options});
         Cell.apply(this, [{
                     config: config, 
                     keyboard_manager: options.keyboard_manager, 
@@ -70,7 +71,7 @@ define([
     TextCell.prototype.create_element = function () {
         Cell.prototype.create_element.apply(this, arguments);
 
-        var cell = $("<div>").addClass('cell text_cell border-box-sizing');
+        var cell = $("<div>").addClass('cell text_cell');
         cell.attr('tabindex','2');
 
         var prompt = $('<div/>').addClass('prompt input_prompt');
@@ -83,8 +84,8 @@ define([
         var input_area = $('<div/>').addClass('input_area');
         this.code_mirror = new CodeMirror(input_area.get(0), this.cm_config);
         // The tabindex=-1 makes this div focusable.
-        var render_area = $('<div/>').addClass('text_cell_render border-box-sizing').
-            addClass('rendered_html').attr('tabindex','-1');
+        var render_area = $('<div/>').addClass('text_cell_render rendered_html')
+            .attr('tabindex','-1');
         inner_cell.append(input_area).append(render_area);
         cell.append(inner_cell);
         this.element = cell;
@@ -130,15 +131,10 @@ define([
         if (cont) {
             var text_cell = this.element;
             var output = text_cell.find("div.text_cell_render");
-            output.hide();
-            text_cell.find('div.input_area').show();
             if (this.get_text() === this.placeholder) {
                 this.set_text('');
             }
             this.refresh();
-        }
-        if (this.celltoolbar.ui_controls_list.length) {
-            this.celltoolbar.show();
         }
         return cont;
     };
@@ -163,6 +159,7 @@ define([
      * */
     TextCell.prototype.set_text = function(text) {
         this.code_mirror.setValue(text);
+        this.unrender();
         this.code_mirror.refresh();
     };
 
@@ -179,7 +176,6 @@ define([
      */
     TextCell.prototype.set_rendered = function(text) {
         this.element.find('div.text_cell_render').html(text);
-        this.celltoolbar.hide();
     };
 
 
@@ -229,7 +225,7 @@ define([
         //          keyboard_manager: KeyboardManager instance 
         //          notebook: Notebook instance
         options = options || {};
-        var config = this.mergeopt(MarkdownCell, options.config);
+        var config = utils.mergeopt(MarkdownCell, options.config);
         TextCell.apply(this, [$.extend({}, options, {config: config})]);
 
         this.cell_type = 'markdown';
@@ -263,8 +259,6 @@ define([
             // links in markdown cells should open in new tabs
             html.find("a[href]").not('[href^="#"]').attr("target", "_blank");
             this.set_rendered(html);
-            this.element.find('div.input_area').hide();
-            this.element.find("div.text_cell_render").show();
             this.typeset();
         }
         return cont;
@@ -282,11 +276,9 @@ define([
         //          keyboard_manager: KeyboardManager instance 
         //          notebook: Notebook instance
         options = options || {};
-        var config = this.mergeopt(RawCell, options.config);
+        var config = utils.mergeopt(RawCell, options.config);
         TextCell.apply(this, [$.extend({}, options, {config: config})]);
 
-        // RawCell should always hide its rendered div
-        this.element.find('div.text_cell_render').hide();
         this.cell_type = 'raw';
     };
 
@@ -342,7 +334,7 @@ define([
         //          keyboard_manager: KeyboardManager instance 
         //          notebook: Notebook instance
         options = options || {};
-        var config = this.mergeopt(HeadingCell, options.config);
+        var config = utils.mergeopt(HeadingCell, options.config);
         TextCell.apply(this, [$.extend({}, options, {config: config})]);
 
         this.level = 1;
@@ -350,6 +342,9 @@ define([
     };
 
     HeadingCell.options_default = {
+        cm_config: {
+            theme: 'heading-1'
+        },
         placeholder: "Type Heading Here"
     };
 
@@ -361,6 +356,7 @@ define([
             this.level = data.level;
         }
         TextCell.prototype.fromJSON.apply(this, arguments);
+        this.code_mirror.setOption("theme", "heading-"+this.level);
     };
 
 
@@ -377,6 +373,8 @@ define([
      */
     HeadingCell.prototype.set_level = function (level) {
         this.level = level;
+        this.code_mirror.setOption("theme", "heading-"+level);
+
         if (this.rendered) {
             this.rendered = false;
             this.render();
@@ -414,7 +412,7 @@ define([
             html = security.sanitize_html(html);
             var h = $($.parseHTML(html));
             // add id and linkback anchor
-            var hash = h.text().replace(/ /g, '-');
+            var hash = h.text().trim().replace(/ /g, '-');
             h.attr('id', hash);
             h.append(
                 $('<a/>')
@@ -423,8 +421,6 @@ define([
                     .text('¶')
             );
             this.set_rendered(h);
-            this.element.find('div.input_area').hide();
-            this.element.find("div.text_cell_render").show();
             this.typeset();
         }
         return cont;

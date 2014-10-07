@@ -7,7 +7,8 @@ define([
     'base/js/utils',
     'notebook/js/tour',
     'bootstrap',
-], function(IPython, $, utils, tour) {
+    'moment',
+], function(IPython, $, utils, tour, bootstrap, moment) {
     "use strict";
     
     var MenuBar = function (selector, options) {
@@ -50,9 +51,9 @@ define([
         }
     };
 
+    // TODO: This has definitively nothing to do with style ...
     MenuBar.prototype.style = function () {
         var that = this;
-        this.element.addClass('border-box-sizing');
         this.element.find("li").click(function (event, ui) {
                 // The selected cell loses focus when the menu is entered, so we
                 // re-select it upon selection.
@@ -157,12 +158,13 @@ define([
             }
         });
         this.element.find('#kill_and_exit').click(function () {
-            that.notebook.session.delete();
-            setTimeout(function(){
+            var close_window = function () {
                 // allow closing of new tabs in Chromium, impossible in FF
                 window.open('', '_self', '');
                 window.close();
-            }, 500);
+            };
+            // finish with close on success or failure
+            that.notebook.session.delete(close_window, close_window);
         });
         // Edit
         this.element.find('#cut_cell').click(function () {
@@ -335,7 +337,7 @@ define([
                 $("<li/>").append(
                     $("<a/>")
                     .attr("href", "#")
-                    .text(d.format("mmm dd HH:MM:ss"))
+                    .text(moment(d).format("LLLL"))
                     .click(function () {
                         that.notebook.restore_checkpoint_dialog(checkpoint);
                     })

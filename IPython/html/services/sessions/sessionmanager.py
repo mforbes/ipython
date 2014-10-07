@@ -1,20 +1,7 @@
-"""A base class session manager.
+"""A base class session manager."""
 
-Authors:
-
-* Zach Sailer
-"""
-
-#-----------------------------------------------------------------------------
-#  Copyright (C) 2013  The IPython Development Team
-#
-#  Distributed under the terms of the BSD License.  The full license is in
-#  the file COPYING, distributed as part of this software.
-#-----------------------------------------------------------------------------
-
-#-----------------------------------------------------------------------------
-# Imports
-#-----------------------------------------------------------------------------
+# Copyright (c) IPython Development Team.
+# Distributed under the terms of the Modified BSD License.
 
 import uuid
 import sqlite3
@@ -25,14 +12,11 @@ from IPython.config.configurable import LoggingConfigurable
 from IPython.utils.py3compat import unicode_type
 from IPython.utils.traitlets import Instance
 
-#-----------------------------------------------------------------------------
-# Classes
-#-----------------------------------------------------------------------------
 
 class SessionManager(LoggingConfigurable):
 
     kernel_manager = Instance('IPython.html.services.kernels.kernelmanager.MappingKernelManager')
-    notebook_manager = Instance('IPython.html.services.notebooks.nbmanager.NotebookManager', args=())
+    contents_manager = Instance('IPython.html.services.contents.manager.ContentsManager', args=())
     
     # Session database initialized below
     _cursor = None
@@ -53,7 +37,7 @@ class SessionManager(LoggingConfigurable):
         """Start a database connection"""
         if self._connection is None:
             self._connection = sqlite3.connect(':memory:')
-            self._connection.row_factory = self.row_factory
+            self._connection.row_factory = sqlite3.Row
         return self._connection
         
     def __del__(self):
@@ -73,11 +57,11 @@ class SessionManager(LoggingConfigurable):
         "Create a uuid for a new session"
         return unicode_type(uuid.uuid4())
 
-    def create_session(self, name=None, path=None, kernel_name='python'):
+    def create_session(self, name=None, path=None, kernel_name=None):
         """Creates a session and returns its model"""
         session_id = self.new_session_id()
         # allow nbm to specify kernels cwd
-        kernel_path = self.notebook_manager.get_kernel_path(name=name, path=path)
+        kernel_path = self.contents_manager.get_kernel_path(name=name, path=path)
         kernel_id = self.kernel_manager.start_kernel(path=kernel_path,
                                                      kernel_name=kernel_name)
         return self.save_session(session_id, name=name, path=path,
@@ -141,14 +125,20 @@ class SessionManager(LoggingConfigurable):
         query = "SELECT * FROM session WHERE %s" % (' AND '.join(conditions))
 
         self.cursor.execute(query, list(kwargs.values()))
-        model = self.cursor.fetchone()
-        if model is None:
+        try:
+            row = self.cursor.fetchone()
+        except KeyError:
+            # The kernel is missing, so the session just got deleted.
+            row = None
+
+        if row is None:
             q = []
             for key, value in kwargs.items():
                 q.append("%s=%r" % (key, value))
 
             raise web.HTTPError(404, u'Session not found: %s' % (', '.join(q)))
-        return model
+
+        return self.row_to_model(row)
 
     def update_session(self, session_id, **kwargs):
         """Updates the values in the session database.
@@ -179,9 +169,16 @@ class SessionManager(LoggingConfigurable):
         query = "UPDATE session SET %s WHERE session_id=?" % (', '.join(sets))
         self.cursor.execute(query, list(kwargs.values()) + [session_id])
 
-    def row_factory(self, cursor, row):
+    def row_to_model(self, row):
         """Takes sqlite database session row and turns it into a dictionary"""
-        row = sqlite3.Row(cursor, row)
+        if row['kernel_id'] not in self.kernel_manager:
+            # The kernel was killed or died without deleting the session.
+            # We can't use delete_session here because that tries to find
+            # and shut down the kernel.
+            self.cursor.execute("DELETE FROM session WHERE session_id=?", 
+                                (row['session_id'],))
+            raise KeyError
+
         model = {
             'id': row['session_id'],
             'notebook': {
@@ -196,7 +193,15 @@ class SessionManager(LoggingConfigurable):
         """Returns a list of dictionaries containing all the information from
         the session database"""
         c = self.cursor.execute("SELECT * FROM session")
-        return list(c.fetchall())
+        result = []
+        # We need to use fetchall() here, because row_to_model can delete rows,
+        # which messes up the cursor if we're iterating over rows.
+        for row in c.fetchall():
+            try:
+                result.append(self.row_to_model(row))
+            except KeyError:
+                pass
+        return result
 
     def delete_session(self, session_id):
         """Deletes the row in the session database with given session_id"""

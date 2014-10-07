@@ -12,6 +12,11 @@ define([
             // Called when view is rendered.
             this.setElement($("<button />")
                 .addClass('btn btn-default'));
+            this.$el.attr("data-toggle", "tooltip");
+            this.model.on('change:button_style', function(model, value) {
+                this.update_button_style();
+            }, this);
+            this.update_button_style('');
 
             this.update(); // Set defaults.
         },
@@ -22,6 +27,7 @@ define([
             // Called when the model is changed.  The model may have been 
             // changed by another view or by a state update from the back-end.
             var description = this.model.get('description');
+            this.$el.attr("title", this.model.get("tooltip"));
             if (description.length === 0) {
                 this.$el.html("&nbsp;"); // Preserve button height
             } else {
@@ -35,6 +41,17 @@ define([
             }
 
             return ButtonView.__super__.update.apply(this);
+        },
+
+        update_button_style: function(previous_trait_value) {
+            var class_map = {
+                primary: ['btn-primary'],
+                success: ['btn-success'],
+                info: ['btn-info'],
+                warning: ['btn-warning'],
+                danger: ['btn-danger']
+            };
+            this.update_mapped_classes(class_map, 'button_style', previous_trait_value);
         },
 
         events: {

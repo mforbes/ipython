@@ -7539,6 +7539,26 @@ Browsers not listed, including Safari, are supported via the styling under the
   /* Modern browsers */
   justify-content: center;
 }
+.hbox.baseline,
+.vbox.baseline,
+.baseline {
+  /* Old browsers */
+  -webkit-box-pack: baseline;
+  -moz-box-pack: baseline;
+  box-pack: baseline;
+  /* Modern browsers */
+  justify-content: baseline;
+}
+.hbox.stretch,
+.vbox.stretch,
+.stretch {
+  /* Old browsers */
+  -webkit-box-pack: stretch;
+  -moz-box-pack: stretch;
+  box-pack: stretch;
+  /* Modern browsers */
+  justify-content: stretch;
+}
 .hbox.align-start,
 .vbox.align-start,
 .align-start {
@@ -7568,6 +7588,26 @@ Browsers not listed, including Safari, are supported via the styling under the
   box-align: center;
   /* Modern browsers */
   align-items: center;
+}
+.hbox.align-baseline,
+.vbox.align-baseline,
+.align-baseline {
+  /* Old browsers */
+  -webkit-box-align: baseline;
+  -moz-box-align: baseline;
+  box-align: baseline;
+  /* Modern browsers */
+  align-items: baseline;
+}
+.hbox.align-stretch,
+.vbox.align-stretch,
+.align-stretch {
+  /* Old browsers */
+  -webkit-box-align: stretch;
+  -moz-box-align: stretch;
+  box-align: stretch;
+  /* Modern browsers */
+  align-items: stretch;
 }
 div.error {
   margin: 2em;
@@ -7609,6 +7649,9 @@ div#header {
   padding-left: 30px;
   padding-bottom: 5px;
   border-bottom: 1px solid #e7e7e7;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 #ipython_notebook {
   padding-left: 0px;
@@ -7631,6 +7674,9 @@ div#header {
 #site {
   width: 100%;
   display: none;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 /* Smaller buttons */
 .ui-button .ui-button-text {
@@ -7645,6 +7691,132 @@ input.ui-button {
 }
 span#login_widget {
   float: right;
+}
+span#login_widget > .button,
+#logout {
+  display: inline-block;
+  margin-bottom: 0;
+  font-weight: normal;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+  background-image: none;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 1.42857143;
+  border-radius: 4px;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  color: #333333;
+  background-color: #ffffff;
+  border-color: #cccccc;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 3px;
+}
+span#login_widget > .button:focus,
+#logout:focus,
+span#login_widget > .button:active:focus,
+#logout:active:focus,
+span#login_widget > .button.active:focus,
+#logout.active:focus {
+  outline: thin dotted;
+  outline: 5px auto -webkit-focus-ring-color;
+  outline-offset: -2px;
+}
+span#login_widget > .button:hover,
+#logout:hover,
+span#login_widget > .button:focus,
+#logout:focus {
+  color: #333333;
+  text-decoration: none;
+}
+span#login_widget > .button:active,
+#logout:active,
+span#login_widget > .button.active,
+#logout.active {
+  outline: 0;
+  background-image: none;
+  -webkit-box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+}
+span#login_widget > .button.disabled,
+#logout.disabled,
+span#login_widget > .button[disabled],
+#logout[disabled],
+fieldset[disabled] span#login_widget > .button,
+fieldset[disabled] #logout {
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.65;
+  filter: alpha(opacity=65);
+  -webkit-box-shadow: none;
+  box-shadow: none;
+}
+span#login_widget > .button:hover,
+#logout:hover,
+span#login_widget > .button:focus,
+#logout:focus,
+span#login_widget > .button:active,
+#logout:active,
+span#login_widget > .button.active,
+#logout.active,
+.open .dropdown-togglespan#login_widget > .button,
+.open .dropdown-toggle#logout {
+  color: #333333;
+  background-color: #ebebeb;
+  border-color: #adadad;
+}
+span#login_widget > .button:active,
+#logout:active,
+span#login_widget > .button.active,
+#logout.active,
+.open .dropdown-togglespan#login_widget > .button,
+.open .dropdown-toggle#logout {
+  background-image: none;
+}
+span#login_widget > .button.disabled,
+#logout.disabled,
+span#login_widget > .button[disabled],
+#logout[disabled],
+fieldset[disabled] span#login_widget > .button,
+fieldset[disabled] #logout,
+span#login_widget > .button.disabled:hover,
+#logout.disabled:hover,
+span#login_widget > .button[disabled]:hover,
+#logout[disabled]:hover,
+fieldset[disabled] span#login_widget > .button:hover,
+fieldset[disabled] #logout:hover,
+span#login_widget > .button.disabled:focus,
+#logout.disabled:focus,
+span#login_widget > .button[disabled]:focus,
+#logout[disabled]:focus,
+fieldset[disabled] span#login_widget > .button:focus,
+fieldset[disabled] #logout:focus,
+span#login_widget > .button.disabled:active,
+#logout.disabled:active,
+span#login_widget > .button[disabled]:active,
+#logout[disabled]:active,
+fieldset[disabled] span#login_widget > .button:active,
+fieldset[disabled] #logout:active,
+span#login_widget > .button.disabled.active,
+#logout.disabled.active,
+span#login_widget > .button[disabled].active,
+#logout[disabled].active,
+fieldset[disabled] span#login_widget > .button.active,
+fieldset[disabled] #logout.active {
+  background-color: #ffffff;
+  border-color: #cccccc;
+}
+span#login_widget > .button .badge,
+#logout .badge {
+  color: #ffffff;
+  background-color: #333333;
 }
 .nav-header {
   text-transform: none;
@@ -7858,6 +8030,22 @@ input.engine_num_input {
 .notebook_icon:before.pull-right {
   margin-left: .3em;
 }
+.file_icon:before {
+  display: inline-block;
+  font-family: FontAwesome;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  content: "\f016";
+}
+.file_icon:before.pull-left {
+  margin-right: .3em;
+}
+.file_icon:before.pull-right {
+  margin-left: .3em;
+}
 /*!
 *
 * IPython notebook
@@ -7940,21 +8128,22 @@ div.cell {
   /* Modern browsers */
   flex: none;
   border-radius: 4px;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
   border-width: thin;
   border-style: solid;
+  width: 100%;
+  padding: 5px 5px 5px 0px;
+  /* This acts as a spacer between cells, that is outside the border */
+  margin: 0px;
+  outline: none;
 }
 div.cell.selected {
   border-color: #ababab;
 }
 div.cell.edit_mode {
   border-color: green;
-}
-div.cell {
-  width: 100%;
-  padding: 5px 5px 5px 0px;
-  /* This acts as a spacer between cells, that is outside the border */
-  margin: 0px;
-  outline: none;
 }
 div.prompt {
   /* This needs to be wide enough for 3 digit prompt numbers: In[100]: */
@@ -8733,6 +8922,9 @@ div.text_cell_render {
   border-style: none;
   padding: 0.5em 0.5em 0.5em 0.4em;
   color: #000000;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 a.anchor-link:link {
   text-decoration: none;
@@ -8749,6 +8941,41 @@ h6:hover .anchor-link {
 }
 div.cell.text_cell.rendered {
   padding: 0px;
+}
+.text_cell.rendered .input_area {
+  display: none;
+}
+.text_cell.unrendered .text_cell_render {
+  display: none;
+}
+.cm-s-heading-1,
+.cm-s-heading-2,
+.cm-s-heading-3,
+.cm-s-heading-4,
+.cm-s-heading-5,
+.cm-s-heading-6 {
+  font-weight: bold;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+.cm-s-heading-1 {
+  font-size: 150%;
+}
+.cm-s-heading-2 {
+  font-size: 130%;
+}
+.cm-s-heading-3 {
+  font-size: 120%;
+}
+.cm-s-heading-4 {
+  font-size: 110%;
+}
+.cm-s-heading-5 {
+  font-size: 100%;
+  font-style: italic;
+}
+.cm-s-heading-6 {
+  font-size: 90%;
+  font-style: italic;
 }
 .widget-area {
   /*
@@ -8828,32 +9055,6 @@ div.cell.text_cell.rendered {
 }
 /* THE CLASSES BELOW CAN APPEAR ANYWHERE IN THE DOM (POSSIBLEY OUTSIDE OF
    THE WIDGET AREA). */
-.widget-hlabel {
-  /* Horizontal Label */
-  min-width: 10ex;
-  padding-right: 8px;
-  padding-top: 5px;
-  text-align: right;
-  vertical-align: text-top;
-}
-.widget-vlabel {
-  /* Vertical Label */
-  padding-bottom: 5px;
-  text-align: center;
-  vertical-align: text-bottom;
-}
-.widget-hreadout {
-  padding-left: 8px;
-  padding-top: 5px;
-  text-align: left;
-  vertical-align: text-top;
-}
-.widget-vreadout {
-  /* Vertical Label */
-  padding-top: 5px;
-  text-align: center;
-  vertical-align: text-top;
-}
 .slide-track {
   /* Slider Track */
   border: 1px solid #CCCCCC;
@@ -8956,6 +9157,10 @@ div.cell.text_cell.rendered {
   height: 28px !important;
   margin-top: -8px !important;
 }
+.widget-hslider .ui-slider .ui-slider-range {
+  height: 12px !important;
+  margin-top: -4px !important;
+}
 .widget-vslider {
   /* Vertical jQuery Slider */
   /* Fix the padding of the slide track so the ui-slider is sized 
@@ -9033,6 +9238,10 @@ div.cell.text_cell.rendered {
   height: 14px !important;
   margin-left: -9px;
 }
+.widget-vslider .ui-slider .ui-slider-range {
+  width: 12px !important;
+  margin-left: -1px !important;
+}
 .widget-text {
   /* String Textbox - used for TextBoxView and TextAreaView */
   width: 350px;
@@ -9065,66 +9274,11 @@ div.cell.text_cell.rendered {
   /* ComboBox Main Button */
   min-width: 125px;
 }
-.widget-box {
-  /* The following section sets the style for the invisible div that
-    hold widgets and their accompanying labels.
-
-    Looks like this:
-    +-----------------------------+
-    | widget-box (or similar)     |
-    |  +-------+---------------+  |
-    |  | Label | Actual Widget |  |
-    |  +-------+---------------+  |
-    +-----------------------------+
-    */
-  margin: 5px;
-  /* Old browsers */
-  -webkit-box-pack: start;
-  -moz-box-pack: start;
-  box-pack: start;
-  /* Modern browsers */
-  justify-content: flex-start;
-  /* ContainerWidget */
-  box-sizing: border-box;
-  -moz-box-sizing: border-box;
-  -webkit-box-sizing: border-box;
-  /* Old browsers */
-  -webkit-box-align: start;
-  -moz-box-align: start;
-  box-align: start;
-  /* Modern browsers */
-  align-items: flex-start;
+.widget_item .dropdown-menu li a {
+  color: inherit;
 }
 .widget-hbox {
   /* Horizontal widgets */
-  /* The following section sets the style for the invisible div that
-    hold widgets and their accompanying labels.
-
-    Looks like this:
-    +-----------------------------+
-    | widget-box (or similar)     |
-    |  +-------+---------------+  |
-    |  | Label | Actual Widget |  |
-    |  +-------+---------------+  |
-    +-----------------------------+
-    */
-  margin: 5px;
-  /* Old browsers */
-  -webkit-box-pack: start;
-  -moz-box-pack: start;
-  box-pack: start;
-  /* Modern browsers */
-  justify-content: flex-start;
-  /* ContainerWidget */
-  box-sizing: border-box;
-  -moz-box-sizing: border-box;
-  -webkit-box-sizing: border-box;
-  /* Old browsers */
-  -webkit-box-align: start;
-  -moz-box-align: start;
-  box-align: start;
-  /* Modern browsers */
-  align-items: flex-start;
   /* Old browsers */
   display: -webkit-box;
   -webkit-box-orient: horizontal;
@@ -9145,93 +9299,27 @@ div.cell.text_cell.rendered {
   box-flex: 0;
   /* Modern browsers */
   flex: none;
-}
-.widget-hbox-single {
-  /* Single line horizontal widgets */
-  /* Horizontal widgets */
-  /* The following section sets the style for the invisible div that
-    hold widgets and their accompanying labels.
-
-    Looks like this:
-    +-----------------------------+
-    | widget-box (or similar)     |
-    |  +-------+---------------+  |
-    |  | Label | Actual Widget |  |
-    |  +-------+---------------+  |
-    +-----------------------------+
-    */
   margin: 5px;
-  /* Old browsers */
-  -webkit-box-pack: start;
-  -moz-box-pack: start;
-  box-pack: start;
-  /* Modern browsers */
-  justify-content: flex-start;
-  /* ContainerWidget */
-  box-sizing: border-box;
-  -moz-box-sizing: border-box;
-  -webkit-box-sizing: border-box;
-  /* Old browsers */
-  -webkit-box-align: start;
-  -moz-box-align: start;
-  box-align: start;
-  /* Modern browsers */
-  align-items: flex-start;
-  /* Old browsers */
-  display: -webkit-box;
-  -webkit-box-orient: horizontal;
-  -webkit-box-align: stretch;
-  display: -moz-box;
-  -moz-box-orient: horizontal;
-  -moz-box-align: stretch;
-  display: box;
-  box-orient: horizontal;
-  box-align: stretch;
-  /* Modern browsers */
-  display: flex;
-  flex-direction: row;
-  align-items: stretch;
-  /* Old browsers */
-  -webkit-box-flex: 0;
-  -moz-box-flex: 0;
-  box-flex: 0;
-  /* Modern browsers */
-  flex: none;
-  height: 30px;
 }
-.widget-hbox-single input[type="checkbox"] {
+.widget-hbox input[type="checkbox"] {
   margin-top: 9px;
+}
+.widget-hbox .widget-label {
+  /* Horizontal Label */
+  min-width: 10ex;
+  padding-right: 8px;
+  padding-top: 5px;
+  text-align: right;
+  vertical-align: text-top;
+}
+.widget-hbox .widget-readout {
+  padding-left: 8px;
+  padding-top: 5px;
+  text-align: left;
+  vertical-align: text-top;
 }
 .widget-vbox {
   /* Vertical widgets */
-  /* The following section sets the style for the invisible div that
-    hold widgets and their accompanying labels.
-
-    Looks like this:
-    +-----------------------------+
-    | widget-box (or similar)     |
-    |  +-------+---------------+  |
-    |  | Label | Actual Widget |  |
-    |  +-------+---------------+  |
-    +-----------------------------+
-    */
-  margin: 5px;
-  /* Old browsers */
-  -webkit-box-pack: start;
-  -moz-box-pack: start;
-  box-pack: start;
-  /* Modern browsers */
-  justify-content: flex-start;
-  /* ContainerWidget */
-  box-sizing: border-box;
-  -moz-box-sizing: border-box;
-  -webkit-box-sizing: border-box;
-  /* Old browsers */
-  -webkit-box-align: start;
-  -moz-box-align: start;
-  box-align: start;
-  /* Modern browsers */
-  align-items: flex-start;
   /* Old browsers */
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -9253,61 +9341,20 @@ div.cell.text_cell.rendered {
   /* Modern browsers */
   flex: none;
 }
-.widget-vbox-single {
-  /* For vertical slides */
-  /* Vertical widgets */
-  /* The following section sets the style for the invisible div that
-    hold widgets and their accompanying labels.
-
-    Looks like this:
-    +-----------------------------+
-    | widget-box (or similar)     |
-    |  +-------+---------------+  |
-    |  | Label | Actual Widget |  |
-    |  +-------+---------------+  |
-    +-----------------------------+
-    */
-  margin: 5px;
-  /* Old browsers */
-  -webkit-box-pack: start;
-  -moz-box-pack: start;
-  box-pack: start;
-  /* Modern browsers */
-  justify-content: flex-start;
-  /* ContainerWidget */
-  box-sizing: border-box;
-  -moz-box-sizing: border-box;
-  -webkit-box-sizing: border-box;
-  /* Old browsers */
-  -webkit-box-align: start;
-  -moz-box-align: start;
-  box-align: start;
-  /* Modern browsers */
-  align-items: flex-start;
-  /* Old browsers */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-box-align: stretch;
-  display: -moz-box;
-  -moz-box-orient: vertical;
-  -moz-box-align: stretch;
-  display: box;
-  box-orient: vertical;
-  box-align: stretch;
-  /* Modern browsers */
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  /* Old browsers */
-  -webkit-box-flex: 0;
-  -moz-box-flex: 0;
-  box-flex: 0;
-  /* Modern browsers */
-  flex: none;
-  width: 30px;
+.widget-vbox .widget-label {
+  /* Vertical Label */
+  padding-bottom: 5px;
+  text-align: center;
+  vertical-align: text-bottom;
+}
+.widget-vbox .widget-readout {
+  /* Vertical Label */
+  padding-top: 5px;
+  text-align: center;
+  vertical-align: text-top;
 }
 .widget-modal {
-  /* ContainerWidget - ModalView */
+  /* Box - ModalView */
   overflow: hidden;
   position: absolute !important;
   top: 0px;
@@ -9315,11 +9362,11 @@ div.cell.text_cell.rendered {
   margin-left: 0px !important;
 }
 .widget-modal-body {
-  /* ContainerWidget - ModalView Body */
+  /* Box - ModalView Body */
   max-height: none !important;
 }
-.widget-container {
-  /* ContainerWidget */
+.widget-box {
+  /* Box */
   box-sizing: border-box;
   -moz-box-sizing: border-box;
   -webkit-box-sizing: border-box;
@@ -9385,18 +9432,30 @@ body.notebook_app {
     padding-right: 0px;
   }
 }
+#ipython-main-app {
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
+}
 span#notebook_name {
   height: 1em;
   line-height: 1em;
   padding: 3px;
   border: none;
   font-size: 146.5%;
+  border-radius: 4px;
+}
+span#notebook_name:hover {
+  background-color: #e6e6e6;
 }
 div#notebook_panel {
   margin: 0px 0px 0px 0px;
   padding: 0px;
   -webkit-box-shadow: inset 1px 4px 9px -6px rgba(0, 0, 0, 0.25);
   box-shadow: inset 1px 4px 9px -6px rgba(0, 0, 0, 0.25);
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 div#notebook {
   font-size: 14px;
@@ -9502,8 +9561,64 @@ p {
   padding-top: 3px;
 }
 .celltoolbar select {
+  display: block;
+  width: 100%;
+  height: 32px;
+  padding: 6px 12px;
+  font-size: 13px;
+  line-height: 1.42857143;
+  color: #555555;
+  background-color: #ffffff;
+  background-image: none;
+  border: 1px solid #cccccc;
+  border-radius: 4px;
+  -webkit-box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+  -webkit-transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s;
+  transition: border-color ease-in-out .15s, box-shadow ease-in-out .15s;
+  height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  border-radius: 3px;
+  width: inherit;
   font-size: 87%;
   height: 22px;
+  display: inline-block;
+}
+.celltoolbar select:focus {
+  border-color: #66afe9;
+  outline: 0;
+  -webkit-box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, 0.6);
+  box-shadow: inset 0 1px 1px rgba(0,0,0,.075), 0 0 8px rgba(102, 175, 233, 0.6);
+}
+.celltoolbar select::-moz-placeholder {
+  color: #999999;
+  opacity: 1;
+}
+.celltoolbar select:-ms-input-placeholder {
+  color: #999999;
+}
+.celltoolbar select::-webkit-input-placeholder {
+  color: #999999;
+}
+.celltoolbar select[disabled],
+.celltoolbar select[readonly],
+fieldset[disabled] .celltoolbar select {
+  cursor: not-allowed;
+  background-color: #eeeeee;
+  opacity: 1;
+}
+textarea.celltoolbar select {
+  height: auto;
+}
+select.celltoolbar select {
+  height: 30px;
+  line-height: 30px;
+}
+textarea.celltoolbar select,
+select[multiple].celltoolbar select {
+  height: auto;
 }
 .celltoolbar label {
   margin-left: 5px;
@@ -9592,24 +9707,6 @@ fieldset[disabled] #kernel_selector_widget > button {
   -webkit-box-shadow: none;
   box-shadow: none;
 }
-#kernel_selector_widget > button [class^="icon-"].icon-large,
-#kernel_selector_widget > button [class*=" icon-"].icon-large {
-  line-height: .9em;
-}
-#kernel_selector_widget > button [class^="icon-"].icon-spin,
-#kernel_selector_widget > button [class*=" icon-"].icon-spin {
-  display: inline-block;
-}
-#kernel_selector_widget > button [class^="icon-"].pull-left.icon-2x,
-#kernel_selector_widget > button [class*=" icon-"].pull-left.icon-2x,
-#kernel_selector_widget > button [class^="icon-"].pull-right.icon-2x,
-#kernel_selector_widget > button [class*=" icon-"].pull-right.icon-2x {
-  margin-top: .18em;
-}
-#kernel_selector_widget > button [class^="icon-"].icon-spin.icon-large,
-#kernel_selector_widget > button [class*=" icon-"].icon-spin.icon-large {
-  line-height: .8em;
-}
 #kernel_selector_widget > button:hover,
 #kernel_selector_widget > button:focus,
 #kernel_selector_widget > button:active,
@@ -9653,6 +9750,9 @@ fieldset[disabled] #kernel_selector_widget > button.active {
   margin-top: 0px;
   margin-bottom: -19px;
   position: relative;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 #menubar .navbar {
   border-top: 1px;
@@ -9822,6 +9922,38 @@ ul#help_menu li a i {
   margin-right: .3em;
 }
 .kernel_busy_icon:before.pull-right {
+  margin-left: .3em;
+}
+.kernel_dead_icon:before {
+  display: inline-block;
+  font-family: FontAwesome;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  content: "\f1e2";
+}
+.kernel_dead_icon:before.pull-left {
+  margin-right: .3em;
+}
+.kernel_dead_icon:before.pull-right {
+  margin-left: .3em;
+}
+.kernel_disconnected_icon:before {
+  display: inline-block;
+  font-family: FontAwesome;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  content: "\f127";
+}
+.kernel_disconnected_icon:before.pull-left {
+  margin-right: .3em;
+}
+.kernel_disconnected_icon:before.pull-right {
   margin-left: .3em;
 }
 .notification_widget {
@@ -10094,16 +10226,25 @@ fieldset[disabled] .notification_widget.danger.active {
 }
 div#pager_splitter {
   height: 8px;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 #pager-container {
   position: relative;
   padding: 15px 0px;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 div#pager {
   font-size: 14px;
   line-height: 20px;
   overflow: auto;
   display: none;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 div#pager pre {
   line-height: 1.21429em;
@@ -10183,6 +10324,9 @@ span#autosave_status {
   padding: 0px;
   margin-left: -5px;
   margin-top: -5px;
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  -webkit-box-sizing: border-box;
 }
 .toolbar select,
 .toolbar label {

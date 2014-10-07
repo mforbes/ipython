@@ -18,6 +18,7 @@ define([
     'notebook/js/celltoolbarpresets/default',
     'notebook/js/celltoolbarpresets/rawcell',
     'notebook/js/celltoolbarpresets/slideshow',
+    'notebook/js/scrollmanager'
 ], function (
     IPython, 
     $, 
@@ -34,7 +35,8 @@ define([
     tooltip,
     default_celltoolbar,
     rawcell_celltoolbar,
-    slideshow_celltoolbar
+    slideshow_celltoolbar,
+    scrollmanager
     ) {
 
     var Notebook = function (selector, options) {
@@ -53,7 +55,7 @@ define([
         //          base_url : string
         //          notebook_path : string
         //          notebook_name : string
-        this.config = options.config || {};
+        this.config = utils.mergeopt(Notebook, options.config);
         this.base_url = options.base_url;
         this.notebook_path = options.notebook_path;
         this.notebook_name = options.notebook_name;
@@ -62,9 +64,12 @@ define([
         this.save_widget = options.save_widget;
         this.tooltip = new tooltip.Tooltip(this.events);
         this.ws_url = options.ws_url;
-        // default_kernel_name is a temporary measure while we implement proper
-        // kernel selection and delayed start. Do not rely on it.
-        this.default_kernel_name = 'python';
+        this._session_starting = false;
+        this.default_cell_type = this.config.default_cell_type || 'code';
+
+        //  Create default scroll manager.
+        this.scroll_manager = new scrollmanager.ScrollManager(this);
+
         // TODO: This code smells (and the other `= this` line a couple lines down)
         // We need a better way to deal with circular instance references.
         this.keyboard_manager.notebook = this;
@@ -121,8 +126,7 @@ define([
         this.notebook_name_blacklist_re = /[\/\\:]/;
         this.nbformat = 3; // Increment this when changing the nbformat
         this.nbformat_minor = 0; // Increment this when changing the nbformat
-        this.codemirror_mode = 'ipython'
-        this.style();
+        this.codemirror_mode = 'ipython';
         this.create_elements();
         this.bind_events();
         this.save_notebook = function() { // don't allow save until notebook_loaded
@@ -135,14 +139,14 @@ define([
         slideshow_celltoolbar.register(this);
     };
 
-    /**
-     * Tweak the notebook's CSS style.
-     * 
-     * @method style
-     */
-    Notebook.prototype.style = function () {
-        $('div#notebook').addClass('border-box-sizing');
+    Notebook.options_default = {
+        // can be any cell type, or the special values of
+        // 'above', 'below', or 'selected' to get the value from another cell.
+        Notebook: {
+            default_cell_type: 'code',
+        }
     };
+
 
     /**
      * Create an HTML and CSS representation of the notebook.
@@ -423,7 +427,7 @@ define([
      * 
      * @method get_cell
      * @param {Number} index An index of a cell to retrieve
-     * @return {Cell} A particular cell
+     * @return {Cell} Cell or null if no cell was found.
      */
     Notebook.prototype.get_cell = function (index) {
         var result = null;
@@ -439,7 +443,7 @@ define([
      * 
      * @method get_next_cell
      * @param {Cell} cell The provided cell
-     * @return {Cell} The next cell
+     * @return {Cell} the next cell or null if no cell was found.
      */
     Notebook.prototype.get_next_cell = function (cell) {
         var result = null;
@@ -455,14 +459,12 @@ define([
      * 
      * @method get_prev_cell
      * @param {Cell} cell The provided cell
-     * @return {Cell} The previous cell
+     * @return {Cell} The previous cell or null if no cell was found.
      */
     Notebook.prototype.get_prev_cell = function (cell) {
-        // TODO: off-by-one
-        // nb.get_prev_cell(nb.get_cell(1)) is null
         var result = null;
         var index = this.find_cell_index(cell);
-        if (index !== null && index > 1) {
+        if (index !== null && index > 0) {
             result = this.get_cell(index-1);
         }
         return result;
@@ -473,7 +475,7 @@ define([
      * 
      * @method find_cell_index
      * @param {Cell} cell The provided cell
-     * @return {Number} The cell's numeric index
+     * @return {Number} The cell's numeric index or null if no cell was found.
      */
     Notebook.prototype.find_cell_index = function (cell) {
         var result = null;
@@ -758,7 +760,11 @@ define([
      */
     Notebook.prototype.delete_cell = function (index) {
         var i = this.index_or_selected(index);
-        var cell = this.get_selected_cell();
+        var cell = this.get_cell(i);
+        if (!cell.is_deletable()) {
+            return this;
+        }
+
         this.undelete_backup = cell.toJSON();
         $('#undelete_cell').removeClass('disabled');
         if (this.is_valid_cell_index(i)) {
@@ -843,10 +849,25 @@ define([
     Notebook.prototype.insert_cell_at_index = function(type, index){
 
         var ncells = this.ncells();
-        index = Math.min(index,ncells);
-        index = Math.max(index,0);
+        index = Math.min(index, ncells);
+        index = Math.max(index, 0);
         var cell = null;
-        type = type || this.get_selected_cell().cell_type;
+        type = type || this.default_cell_type;
+        if (type === 'above') {
+            if (index > 0) {
+                type = this.get_cell(index-1).cell_type;
+            } else {
+                type = 'code';
+            }
+        } else if (type === 'below') {
+            if (index < ncells) {
+                type = this.get_cell(index).cell_type;
+            } else {
+                type = 'code';
+            }
+        } else if (type === 'selected') {
+            type = this.get_selected_cell().cell_type;
+        }
 
         if (ncells === 0 || this.is_valid_cell_index(index) || index === ncells) {
             var cell_options = {
@@ -977,19 +998,21 @@ define([
     Notebook.prototype.to_code = function (index) {
         var i = this.index_or_selected(index);
         if (this.is_valid_cell_index(i)) {
-            var source_element = this.get_cell_element(i);
-            var source_cell = source_element.data("cell");
+            var source_cell = this.get_cell(i);
             if (!(source_cell instanceof codecell.CodeCell)) {
                 var target_cell = this.insert_cell_below('code',i);
                 var text = source_cell.get_text();
                 if (text === source_cell.placeholder) {
                     text = '';
                 }
+                //metadata
+                target_cell.metadata = source_cell.metadata;
+
                 target_cell.set_text(text);
                 // make this value the starting point, so that we can only undo
                 // to this state, instead of a blank cell
                 target_cell.code_mirror.clearHistory();
-                source_element.remove();
+                source_cell.element.remove();
                 this.select(i);
                 var cursor = source_cell.code_mirror.getCursor();
                 target_cell.code_mirror.setCursor(cursor);
@@ -1007,21 +1030,24 @@ define([
     Notebook.prototype.to_markdown = function (index) {
         var i = this.index_or_selected(index);
         if (this.is_valid_cell_index(i)) {
-            var source_element = this.get_cell_element(i);
-            var source_cell = source_element.data("cell");
+            var source_cell = this.get_cell(i);
+
             if (!(source_cell instanceof textcell.MarkdownCell)) {
                 var target_cell = this.insert_cell_below('markdown',i);
                 var text = source_cell.get_text();
+
                 if (text === source_cell.placeholder) {
                     text = '';
                 }
+                // metadata
+                target_cell.metadata = source_cell.metadata
                 // We must show the editor before setting its contents
                 target_cell.unrender();
                 target_cell.set_text(text);
                 // make this value the starting point, so that we can only undo
                 // to this state, instead of a blank cell
                 target_cell.code_mirror.clearHistory();
-                source_element.remove();
+                source_cell.element.remove();
                 this.select(i);
                 if ((source_cell instanceof textcell.TextCell) && source_cell.rendered) {
                     target_cell.render();
@@ -1042,22 +1068,24 @@ define([
     Notebook.prototype.to_raw = function (index) {
         var i = this.index_or_selected(index);
         if (this.is_valid_cell_index(i)) {
-            var source_element = this.get_cell_element(i);
-            var source_cell = source_element.data("cell");
             var target_cell = null;
+            var source_cell = this.get_cell(i);
+
             if (!(source_cell instanceof textcell.RawCell)) {
                 target_cell = this.insert_cell_below('raw',i);
                 var text = source_cell.get_text();
                 if (text === source_cell.placeholder) {
                     text = '';
                 }
+                //metadata
+                target_cell.metadata = source_cell.metadata;
                 // We must show the editor before setting its contents
                 target_cell.unrender();
                 target_cell.set_text(text);
                 // make this value the starting point, so that we can only undo
                 // to this state, instead of a blank cell
                 target_cell.code_mirror.clearHistory();
-                source_element.remove();
+                source_cell.element.remove();
                 this.select(i);
                 var cursor = source_cell.code_mirror.getCursor();
                 target_cell.code_mirror.setCursor(cursor);
@@ -1077,8 +1105,7 @@ define([
         level = level || 1;
         var i = this.index_or_selected(index);
         if (this.is_valid_cell_index(i)) {
-            var source_element = this.get_cell_element(i);
-            var source_cell = source_element.data("cell");
+            var source_cell = this.get_cell(i);
             var target_cell = null;
             if (source_cell instanceof textcell.HeadingCell) {
                 source_cell.set_level(level);
@@ -1088,6 +1115,8 @@ define([
                 if (text === source_cell.placeholder) {
                     text = '';
                 }
+                //metadata
+                target_cell.metadata = source_cell.metadata;
                 // We must show the editor before setting its contents
                 target_cell.set_level(level);
                 target_cell.unrender();
@@ -1095,7 +1124,7 @@ define([
                 // make this value the starting point, so that we can only undo
                 // to this state, instead of a blank cell
                 target_cell.code_mirror.clearHistory();
-                source_element.remove();
+                source_cell.element.remove();
                 this.select(i);
                 var cursor = source_cell.code_mirror.getCursor();
                 target_cell.code_mirror.setCursor(cursor);
@@ -1163,6 +1192,10 @@ define([
     Notebook.prototype.copy_cell = function () {
         var cell = this.get_selected_cell();
         this.clipboard = cell.toJSON();
+        // remove undeletable status from the copied cell
+        if (this.clipboard.metadata.deletable !== undefined) {
+            delete this.clipboard.metadata.deletable;
+        }
         this.enable_paste();
     };
 
@@ -1534,9 +1567,35 @@ define([
      * @method start_session
      */
     Notebook.prototype.start_session = function (kernel_name) {
-        if (kernel_name === undefined) {
-            kernel_name = this.default_kernel_name;
+        var that = this;
+        if (this._session_starting) {
+            throw new session.SessionAlreadyStarting();
         }
+        this._session_starting = true;
+        
+        if (this.session !== null) {
+            var s = this.session;
+            this.session = null;
+            // need to start the new session in a callback after delete,
+            // because javascript does not guarantee the ordering of AJAX requests (?!)
+            s.delete(function () {
+                    // on successful delete, start new session
+                    that._session_starting = false;
+                    that.start_session(kernel_name);
+                }, function (jqXHR, status, error) {
+                    // log the failed delete, but still create a new session
+                    // 404 just means it was already deleted by someone else,
+                    // but other errors are possible.
+                    utils.log_ajax_error(jqXHR, status, error);
+                    that._session_starting = false;
+                    that.start_session(kernel_name);
+                }
+            );
+            return;
+        }
+        
+        
+    
         this.session = new session.Session({
             base_url: this.base_url,
             ws_url: this.ws_url,
@@ -1548,7 +1607,10 @@ define([
             kernel_name: kernel_name,
             notebook: this});
 
-        this.session.start($.proxy(this._session_started, this));
+        this.session.start(
+            $.proxy(this._session_started, this),
+            $.proxy(this._session_start_failed, this)
+        );
     };
 
 
@@ -1557,7 +1619,8 @@ define([
      * comm manager to the widget manager
      *
      */
-    Notebook.prototype._session_started = function(){
+    Notebook.prototype._session_started = function (){
+        this._session_starting = false;
         this.kernel = this.session.kernel;
         var ncells = this.ncells();
         for (var i=0; i<ncells; i++) {
@@ -1566,6 +1629,10 @@ define([
                 cell.set_kernel(this.session.kernel);
             }
         }
+    };
+    Notebook.prototype._session_start_failed = function (jqxhr, status, error){
+        this._session_starting = false;
+        utils.log_ajax_error(jqxhr, status, error);
     };
     
     /**
@@ -1802,9 +1869,9 @@ define([
                 }
             }
         }
-        if (trusted != this.trusted) {
+        if (trusted !== this.trusted) {
             this.trusted = trusted;
-            this.events.trigger("trust_changed.Notebook", trusted);
+            this.events.trigger("trust_changed.Notebook", {value: trusted});
         }
         if (content.worksheets.length > 1) {
             dialog.modal({
@@ -1894,6 +1961,8 @@ define([
         var model = {};
         model.name = this.notebook_name;
         model.path = this.notebook_path;
+        model.type = 'notebook';
+        model.format = 'json';
         model.content = this.toJSON();
         model.content.nbformat = this.nbformat;
         model.content.nbformat_minor = this.nbformat_minor;
@@ -1917,7 +1986,7 @@ define([
         this.events.trigger('notebook_saving.Notebook');
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name
         );
@@ -2015,7 +2084,7 @@ define([
                                 cell.output_area.trusted = true;
                             }
                         }
-                        this.events.on('notebook_saved.Notebook', function () {
+                        nb.events.on('notebook_saved.Notebook', function () {
                             window.location.reload();
                         });
                         nb.save_notebook();
@@ -2050,7 +2119,7 @@ define([
         };
         var url = utils.url_join_encode(
             base_url,
-            'api/notebooks',
+            'api/contents',
             path
         );
         $.ajax(url,settings);
@@ -2079,7 +2148,7 @@ define([
         };
         var url = utils.url_join_encode(
             base_url,
-            'api/notebooks',
+            'api/contents',
             path
         );
         $.ajax(url,settings);
@@ -2104,7 +2173,7 @@ define([
         this.events.trigger('rename_notebook.Notebook', data);
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name
         );
@@ -2122,7 +2191,7 @@ define([
         };
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name
         );
@@ -2140,8 +2209,7 @@ define([
     Notebook.prototype.rename_error = function (xhr, status, error) {
         var that = this;
         var dialog_body = $('<div/>').append(
-            $("<p/>").addClass("rename-message")
-            .text('This notebook name already exists.')
+            $("<p/>").text('This notebook name already exists.')
         );
         this.events.trigger('notebook_rename_failed.Notebook', [xhr, status, error]);
         dialog.modal({
@@ -2192,7 +2260,7 @@ define([
         this.events.trigger('notebook_loading.Notebook');
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name
         );
@@ -2264,7 +2332,7 @@ define([
         // code execution upon loading, which is a security risk.
         if (this.session === null) {
             var kernelspec = this.metadata.kernelspec || {};
-            var kernel_name = kernelspec.name || this.default_kernel_name;
+            var kernel_name = kernelspec.name;
 
             this.start_session(kernel_name);
         }
@@ -2294,13 +2362,14 @@ define([
      */
     Notebook.prototype.load_notebook_error = function (xhr, status, error) {
         this.events.trigger('notebook_load_failed.Notebook', [xhr, status, error]);
+        utils.log_ajax_error(xhr, status, error);
         var msg;
         if (xhr.status === 400) {
-            msg = error;
+            msg = escape(utils.ajax_error_msg(xhr));
         } else if (xhr.status === 500) {
             msg = "An unknown error occurred while loading this notebook. " +
             "This version can load notebook formats " +
-            "v" + this.nbformat + " or earlier.";
+            "v" + this.nbformat + " or earlier. See the server log for details.";
         }
         dialog.modal({
             notebook: this,
@@ -2355,7 +2424,7 @@ define([
     Notebook.prototype.list_checkpoints = function () {
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name,
             'checkpoints'
@@ -2406,7 +2475,7 @@ define([
     Notebook.prototype.create_checkpoint = function () {
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name,
             'checkpoints'
@@ -2495,7 +2564,7 @@ define([
         this.events.trigger('notebook_restoring.Notebook', checkpoint);
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name,
             'checkpoints',
@@ -2543,7 +2612,7 @@ define([
         this.events.trigger('notebook_restoring.Notebook', checkpoint);
         var url = utils.url_join_encode(
             this.base_url,
-            'api/notebooks',
+            'api/contents',
             this.notebook_path,
             this.notebook_name,
             'checkpoints',
@@ -2575,10 +2644,10 @@ define([
      * @method delete_checkpoint_error
      * @param {jqXHR} xhr jQuery Ajax object
      * @param {String} status Description of response status
-     * @param {String} error_msg HTTP error message
+     * @param {String} error HTTP error message
      */
-    Notebook.prototype.delete_checkpoint_error = function (xhr, status, error_msg) {
-        this.events.trigger('checkpoint_delete_failed.Notebook');
+    Notebook.prototype.delete_checkpoint_error = function (xhr, status, error) {
+        this.events.trigger('checkpoint_delete_failed.Notebook', [xhr, status, error]);
     };
 
 

@@ -6,11 +6,12 @@ define([
     'jquery',
     'base/js/utils',
 ], function(IPython, $, utils) {
+    // TODO: remove IPython dependency here 
     "use strict";
 
     // monkey patch CM to be able to syntax highlight cell magics
     // bug reported upstream,
-    // see https://github.com/marijnh/CodeMirror2/issues/670
+    // see https://github.com/codemirror/CodeMirror/issues/670
     if(CodeMirror.getMode(1,'text/plain').indent === undefined ){
         CodeMirror.modes.null = function() {
             return {token: function(stream) {stream.skipToEnd();},indent : function(){return 0;}};
@@ -41,7 +42,7 @@ define([
         options = options || {};
         this.keyboard_manager = options.keyboard_manager;
         this.events = options.events;
-        var config = this.mergeopt(Cell, options.config);
+        var config = utils.mergeopt(Cell, options.config);
         // superclass default overwrite our default
         
         this.placeholder = config.placeholder || '';
@@ -88,16 +89,10 @@ define([
     
     // FIXME: Workaround CM Bug #332 (Safari segfault on drag)
     // by disabling drag/drop altogether on Safari
-    // https://github.com/marijnh/CodeMirror/issues/332    
+    // https://github.com/codemirror/CodeMirror/issues/332    
     if (utils.browser[0] == "Safari") {
         Cell.options_default.cm_config.dragDrop = false;
     }
-
-    Cell.prototype.mergeopt = function(_class, options, overwrite){
-        options = options || {};
-        overwrite = overwrite || {};
-        return $.extend(true, {}, _class.options_default, options, overwrite);
-    };
 
     /**
      * Empty. Subclasses must implement create_element.
@@ -177,7 +172,6 @@ define([
      * @return {Boolean} `true` if CodeMirror should ignore the event, `false` Otherwise
      */
     Cell.prototype.handle_codemirror_keyevent = function (editor, event) {
-        var that = this;
         var shortcuts = this.keyboard_manager.edit_shortcuts;
 
         // if this is an edit_shortcuts shortcut, the global keyboard/shortcut
@@ -391,7 +385,8 @@ define([
      **/
     Cell.prototype.toJSON = function () {
         var data = {};
-        data.metadata = this.metadata;
+        // deepcopy the metadata so copied cells don't share the same object
+        data.metadata = JSON.parse(JSON.stringify(this.metadata));
         data.cell_type = this.cell_type;
         return data;
     };
@@ -410,22 +405,35 @@ define([
 
 
     /**
-     * can the cell be split into two cells
+     * can the cell be split into two cells (false if not deletable)
      * @method is_splittable
      **/
     Cell.prototype.is_splittable = function () {
-        return true;
+        return this.is_deletable();
     };
 
 
     /**
-     * can the cell be merged with other cells
+     * can the cell be merged with other cells (false if not deletable)
      * @method is_mergeable
      **/
     Cell.prototype.is_mergeable = function () {
-        return true;
+        return this.is_deletable();
     };
 
+    /**
+     * is the cell deletable? only false (undeletable) if
+     * metadata.deletable is explicitly false -- everything else
+     * counts as true
+     *
+     * @method is_deletable
+     **/
+    Cell.prototype.is_deletable = function () {
+        if (this.metadata.deletable === false) {
+            return false;
+        }
+        return true;
+    };
 
     /**
      * @return {String} - the text before the cursor
@@ -556,7 +564,7 @@ define([
         this.code_mirror.setOption('mode', default_mode);
     };
 
-    // Backwards compatability.
+    // Backwards compatibility.
     IPython.Cell = Cell;
 
     return {'Cell': Cell};

@@ -33,11 +33,11 @@ class NotebookTestBase(TestCase):
     @classmethod
     def wait_until_alive(cls):
         """Wait for the server to be alive"""
-        url = 'http://localhost:%i/api/notebooks' % cls.port
+        url = 'http://localhost:%i/api/contents' % cls.port
         for _ in range(int(MAX_WAITTIME/POLL_INTERVAL)):
             try:
                 requests.get(url)
-            except requests.exceptions.ConnectionError:
+            except Exception as e:
                 if cls.notebook.poll() is not None:
                     raise RuntimeError("The notebook server exited with status %s" \
                                         % cls.notebook.poll())
@@ -95,7 +95,7 @@ def assert_http_error(status, msg=None):
     except requests.HTTPError as e:
         real_status = e.response.status_code
         assert real_status == status, \
-                    "Expected status %d, got %d" % (real_status, status)
+                    "Expected status %d, got %d" % (status, real_status)
         if msg:
             assert msg in str(e), e
     else:

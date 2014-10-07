@@ -76,7 +76,7 @@ define([
             onKeyEvent: $.proxy(this.handle_keyevent,this)
         };
 
-        var config = this.mergeopt(CodeCell, this.config, {cm_config: cm_overwrite_options});
+        var config = utils.mergeopt(CodeCell, this.config, {cm_config: cm_overwrite_options});
         Cell.apply(this,[{
             config: config, 
             keyboard_manager: options.keyboard_manager, 
@@ -123,7 +123,7 @@ define([
     CodeCell.prototype.create_element = function () {
         Cell.prototype.create_element.apply(this, arguments);
 
-        var cell =  $('<div></div>').addClass('cell border-box-sizing code_cell');
+        var cell =  $('<div></div>').addClass('cell code_cell');
         cell.attr('tabindex','2');
 
         var input = $('<div></div>').addClass('input');

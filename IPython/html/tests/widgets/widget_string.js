@@ -7,10 +7,10 @@ casper.notebook_test(function () {
     this.execute_cell_then(index);
 
     var string_index = this.append_cell(
-        'string_widget = [widgets.TextWidget(value = "xyz", placeholder = "abc"),\n' +
-        '    widgets.TextareaWidget(value = "xyz", placeholder = "def"),\n' +
-        '    widgets.HTMLWidget(value = "xyz"),\n' +
-        '    widgets.LatexWidget(value = "$\\\\LaTeX{}$")]\n' +
+        'string_widget = [widgets.Text(value = "xyz", placeholder = "abc"),\n' +
+        '    widgets.Textarea(value = "xyz", placeholder = "def"),\n' +
+        '    widgets.HTML(value = "xyz"),\n' +
+        '    widgets.Latex(value = "$\\\\LaTeX{}$")]\n' +
         '[display(widget) for widget in string_widget]\n'+
         'print("Success")');
     this.execute_cell_then(string_index, function(index){
@@ -23,7 +23,7 @@ casper.notebook_test(function () {
             'Widget subarea exists.');
 
         this.test.assert(this.cell_element_exists(index, 
-            '.widget-area .widget-subarea .widget-hbox-single input[type=text]'),
+            '.widget-area .widget-subarea .widget-hbox input[type=text]'),
             'Textbox exists.');
 
         this.test.assert(this.cell_element_exists(index, 
@@ -35,7 +35,7 @@ casper.notebook_test(function () {
             'Python set textarea value.');
 
         this.test.assert(this.cell_element_function(index, 
-            '.widget-area .widget-subarea .widget-hbox-single input[type=text]', 'val')=='xyz',
+            '.widget-area .widget-subarea .widget-hbox input[type=text]', 'val')=='xyz',
             'Python set textbox value.');
 
         this.test.assert(this.cell_element_exists(string_index, 
@@ -47,7 +47,7 @@ casper.notebook_test(function () {
             'Python set textarea placeholder.');
 
         this.test.assert(this.cell_element_function(index, 
-            '.widget-area .widget-subarea .widget-hbox-single input[type=text]', 'attr', ['placeholder'])=='abc',
+            '.widget-area .widget-subarea .widget-hbox input[type=text]', 'attr', ['placeholder'])=='abc',
             'Python set textbox placehoder.');
     });
 });

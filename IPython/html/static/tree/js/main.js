@@ -46,7 +46,7 @@ require([
         common_options));
     login_widget = new loginwidget.LoginWidget('#login_widget', common_options);
 
-    $('#new_notebook').button().click(function (e) {
+    $('#new_notebook').click(function (e) {
         notebook_list.new_notebook();
     });
 
@@ -57,18 +57,12 @@ require([
 
     var enable_autorefresh = function(){
         //refresh immediately , then start interval
-        if($('.upload_button').length === 0)
-        {
-            session_list.load_sessions();
-            cluster_list.load_list();
-        }
+        session_list.load_sessions();
+        cluster_list.load_list();
         if (!interval_id){
             interval_id = setInterval(function(){
-                    if($('.upload_button').length === 0)
-                    {
-                        session_list.load_sessions();
-                        cluster_list.load_list();
-                    }
+                    session_list.load_sessions();
+                    cluster_list.load_list();
                 }, time_refresh*1000);
             }
     };

@@ -47,16 +47,15 @@ define([
         render: function(){
             // Called when view is rendered.
             this.$el
-                .addClass('widget-hbox');
+                .addClass('widget-hbox widget-textarea');
             this.$label = $('<div />')
                 .appendTo(this.$el)
-                .addClass('widget-hlabel')
+                .addClass('widget-label')
                 .hide();
             this.$textbox = $('<textarea />')
                 .attr('rows', 5)
                 .addClass('widget-text form-control')
                 .appendTo(this.$el);
-            this.$el_to_style = this.$textbox; // Set default element to style
             this.update(); // Set defaults.
 
             this.model.on('msg:custom', $.proxy(this._handle_textarea_msg, this));
@@ -108,6 +107,11 @@ define([
             }
             return TextareaView.__super__.update.apply(this);
         },
+
+        update_attr: function(name, value) {
+            // Set a css attr of the widget view.
+            this.$textbox.css(name, value);
+        },
         
         events: {
             // Dictionary of events and their handlers.
@@ -131,16 +135,15 @@ define([
         render: function(){
             // Called when view is rendered.
             this.$el
-                .addClass('widget-hbox-single');
+                .addClass('widget-hbox widget-text');
             this.$label = $('<div />')
-                .addClass('widget-hlabel')
+                .addClass('widget-label')
                 .appendTo(this.$el)
                 .hide();
             this.$textbox = $('<input type="text" />')
                 .addClass('input')
                 .addClass('widget-text form-control')
                 .appendTo(this.$el);
-            this.$el_to_style = this.$textbox; // Set default element to style
             this.update(); // Set defaults.
             this.model.on('change:placeholder', function(model, value, options) {
                 this.update_placeholder(value);
@@ -180,6 +183,11 @@ define([
             }
             return TextView.__super__.update.apply(this);
         },
+
+        update_attr: function(name, value) {
+            // Set a css attr of the widget view.
+            this.$textbox.css(name, value);
+        },
         
         events: {
             // Dictionary of events and their handlers.
@@ -204,8 +212,8 @@ define([
             // Handles text submition
             if (e.keyCode == 13) { // Return key
                 this.send({event: 'submit'});
-                event.stopPropagation();
-                event.preventDefault();
+                e.stopPropagation();
+                e.preventDefault();
                 return false;
             }
         },
@@ -216,8 +224,8 @@ define([
             // TODO: Is the original bug actually a fault of the keyboard
             // manager?
             if (e.relatedTarget === null) {
-                event.stopPropagation();
-                event.preventDefault();
+                e.stopPropagation();
+                e.preventDefault();
                 return false;
             }
         },
@@ -226,8 +234,8 @@ define([
             // Prevent a blur from firing if the blur was not user intended.
             // This is a workaround for the return-key focus loss bug.
             if (e.relatedTarget === null) {
-                event.stopPropagation();
-                event.preventDefault();
+                e.stopPropagation();
+                e.preventDefault();
                 return false;
             }
         },

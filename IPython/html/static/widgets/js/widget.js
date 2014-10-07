@@ -24,9 +24,9 @@ define(["widgets/js/manager",
             this._buffered_state_diff = {};
             this.pending_msgs = 0;
             this.msg_buffer = null;
-            this.key_value_lock = null;
+            this.state_lock = null;
             this.id = model_id;
-            this.views = [];
+            this.views = {};
 
             if (comm !== undefined) {
                 // Remember comm associated with the model.
@@ -52,12 +52,16 @@ define(["widgets/js/manager",
         _handle_comm_closed: function (msg) {
             // Handle when a widget is closed.
             this.trigger('comm:close');
+            this.stopListening();
+            this.trigger('destroy', this);
             delete this.comm.model; // Delete ref so GC will collect widget model.
             delete this.comm;
             delete this.model_id; // Delete id from model so widget manager cleans up.
-            _.each(this.views, function(view, i) {
-                view.remove();
-            });
+            for (var id in this.views) {
+                if (this.views.hasOwnProperty(id)) {
+                    this.views[id].remove();
+                }
+            }
         },
 
         _handle_comm_msg: function (msg) {
@@ -65,7 +69,7 @@ define(["widgets/js/manager",
             var method = msg.content.data.method;
             switch (method) {
                 case 'update':
-                    this.apply_update(msg.content.data.state);
+                    this.set_state(msg.content.data.state);
                     break;
                 case 'custom':
                     this.trigger('msg:custom', msg.content.data.content);
@@ -76,17 +80,18 @@ define(["widgets/js/manager",
             }
         },
 
-        apply_update: function (state) {
+        set_state: function (state) {
             // Handle when a widget is updated via the python side.
-            var that = this;
-            _.each(state, function(value, key) {
-                that.key_value_lock = [key, value];
-                try {
-                    WidgetModel.__super__.set.apply(that, [key, that._unpack_models(value)]);
-                } finally {
-                    that.key_value_lock = null;
-                }
-            });
+            this.state_lock = state;
+            try {
+                var that = this;
+                WidgetModel.__super__.set.apply(this, [Object.keys(state).reduce(function(obj, key) {
+                    obj[key] = that._unpack_models(state[key]);
+                    return obj;
+                }, {})]);
+            } finally {
+               this.state_lock = null;
+            }
         },
 
         _handle_status: function (msg, callbacks) {
@@ -149,11 +154,13 @@ define(["widgets/js/manager",
 
             // Delete any key value pairs that the back-end already knows about.
             var attrs = (method === 'patch') ? options.attrs : model.toJSON(options);
-            if (this.key_value_lock !== null) {
-                var key = this.key_value_lock[0];
-                var value = this.key_value_lock[1];
-                if (attrs[key] === value) {
-                    delete attrs[key];
+            if (this.state_lock !== null) {
+                var keys = Object.keys(this.state_lock);
+                for (var i=0; i<keys.length; i++) {
+                    var key = keys[i];
+                    if (attrs[key] === this.state_lock[key]) {
+                        delete attrs[key];
+                    }
                 }
             }
 
@@ -253,17 +260,30 @@ define(["widgets/js/manager",
                 return unpacked;
 
             } else if (typeof value === 'string' && value.slice(0,10) === "IPY_MODEL_") {
-		var model = this.widget_manager.get_model(value.slice(10, value.length));
-		if (model) {
-		    return model;
-		} else {
-		    return value;
-		}
+                var model = this.widget_manager.get_model(value.slice(10, value.length));
+                if (model) {
+                    return model;
+                } else {
+                    return value;
+                }
             } else {
                     return value;
             }
         },
 
+        on_some_change: function(keys, callback, context) {
+            // on_some_change(["key1", "key2"], foo, context) differs from
+            // on("change:key1 change:key2", foo, context).
+            // If the widget attributes key1 and key2 are both modified, 
+            // the second form will result in foo being called twice
+            // while the first will call foo only once.
+            this.on('change', function() {
+                if (keys.some(this.hasChanged, this)) {
+                    callback.apply(context);
+                }
+            }, this);
+
+       },
     });
     widgetmanager.WidgetManager.register_widget_model('WidgetModel', WidgetModel);
 
@@ -275,8 +295,8 @@ define(["widgets/js/manager",
             this.options = parameters.options;
             this.child_model_views = {};
             this.child_views = {};
-            this.model.views.push(this);
             this.id = this.id || IPython.utils.uuid();
+            this.model.views[this.id] = this;
             this.on('displayed', function() { 
                 this.is_displayed = true; 
             }, this);
@@ -321,7 +341,7 @@ define(["widgets/js/manager",
                 var view = this.child_views[view_id];
                 delete this.child_views[view_id];
                 view_ids.splice(0,1);
-                child_model.views.pop(view);
+                delete child_model.views[view_id];
             
                 // Remove the view list specific to this model if it is empty.
                 if (view_ids.length === 0) {
@@ -409,35 +429,89 @@ define(["widgets/js/manager",
             // Public constructor
             DOMWidgetView.__super__.initialize.apply(this, [parameters]);
             this.on('displayed', this.show, this);
+            this.model.on('change:visible', this.update_visible, this);
+            this.model.on('change:_css', this.update_css, this);
+
+            this.model.on('change:_dom_classes', function(model, new_classes) {
+                var old_classes = model.previous('_dom_classes');
+                this.update_classes(old_classes, new_classes);
+            }, this);
+
+            this.model.on('change:color', function (model, value) { 
+                this.update_attr('color', value); }, this);
+
+            this.model.on('change:background_color', function (model, value) { 
+                this.update_attr('background', value); }, this);
+
+            this.model.on('change:width', function (model, value) { 
+                this.update_attr('width', value); }, this);
+
+            this.model.on('change:height', function (model, value) { 
+                this.update_attr('height', value); }, this);
+
+            this.model.on('change:border_color', function (model, value) { 
+                this.update_attr('border-color', value); }, this);
+
+            this.model.on('change:border_width', function (model, value) { 
+                this.update_attr('border-width', value); }, this);
+
+            this.model.on('change:border_style', function (model, value) { 
+                this.update_attr('border-style', value); }, this);
+
+            this.model.on('change:font_style', function (model, value) { 
+                this.update_attr('font-style', value); }, this);
+
+            this.model.on('change:font_weight', function (model, value) { 
+                this.update_attr('font-weight', value); }, this);
+
+            this.model.on('change:font_size', function (model, value) { 
+                this.update_attr('font-size', this._default_px(value)); }, this);
+
+            this.model.on('change:font_family', function (model, value) { 
+                this.update_attr('font-family', value); }, this);
+
+            this.model.on('change:padding', function (model, value) { 
+                this.update_attr('padding', value); }, this);
+
+            this.model.on('change:margin', function (model, value) { 
+                this.update_attr('margin', this._default_px(value)); }, this);
+
+            this.model.on('change:border_radius', function (model, value) { 
+                this.update_attr('border-radius', this._default_px(value)); }, this);
+
             this.after_displayed(function() {
                 this.update_visible(this.model, this.model.get("visible"));
                 this.update_css(this.model, this.model.get("_css"));
+
+                this.update_classes([], this.model.get('_dom_classes'));
+                this.update_attr('color', this.model.get('color'));
+                this.update_attr('background', this.model.get('background_color'));
+                this.update_attr('width', this.model.get('width'));
+                this.update_attr('height', this.model.get('height'));
+                this.update_attr('border-color', this.model.get('border_color'));
+                this.update_attr('border-width', this.model.get('border_width'));
+                this.update_attr('border-style', this.model.get('border_style'));
+                this.update_attr('font-style', this.model.get('font_style'));
+                this.update_attr('font-weight', this.model.get('font_weight'));
+                this.update_attr('font-size', this.model.get('font_size'));
+                this.update_attr('font-family', this.model.get('font_family'));
+                this.update_attr('padding', this.model.get('padding'));
+                this.update_attr('margin', this.model.get('margin'));
+                this.update_attr('border-radius', this.model.get('border_radius'));
             }, this);
-            this.model.on('msg:custom', this.on_msg, this);
-            this.model.on('change:visible', this.update_visible, this);
-            this.model.on('change:_css', this.update_css, this);
         },
 
-        on_msg: function(msg) {
-            // Handle DOM specific msgs.
-            switch(msg.msg_type) {
-                case 'add_class':
-                    this.add_class(msg.selector, msg.class_list);
-                    break;
-                case 'remove_class':
-                    this.remove_class(msg.selector, msg.class_list);
-                    break;
+        _default_px: function(value) {
+            // Makes browser interpret a numerical string as a pixel value.
+            if (/^\d+\.?(\d+)?$/.test(value.trim())) {
+                return value.trim() + 'px';
             }
+            return value;
         },
 
-        add_class: function (selector, class_list) {
-            // Add a DOM class to an element.
-            this._get_selector_element(selector).addClass(class_list);
-        },
-
-        remove_class: function (selector, class_list) {
-            // Remove a DOM class from an element.
-            this._get_selector_element(selector).removeClass(class_list);
+        update_attr: function(name, value) {
+            // Set a css attr of the widget view.
+            this.$el.css(name, value);
         },
 
         update_visible: function(model, value) {
@@ -461,26 +535,67 @@ define(["widgets/js/manager",
             }
         },
 
+        update_classes: function (old_classes, new_classes, $el) {
+            // Update the DOM classes applied to an element, default to this.$el.
+            if ($el===undefined) {
+                $el = this.$el;
+            }
+            this.do_diff(old_classes, new_classes, function(removed) {
+                $el.removeClass(removed);
+            }, function(added) {
+                $el.addClass(added);
+            });
+        },
+
+        update_mapped_classes: function(class_map, trait_name, previous_trait_value, $el) {
+            // Update the DOM classes applied to the widget based on a single
+            // trait's value.
+            //
+            // Given a trait value classes map, this function automatically
+            // handles applying the appropriate classes to the widget element
+            // and removing classes that are no longer valid.
+            //
+            // Parameters
+            // ----------
+            // class_map: dictionary
+            //  Dictionary of trait values to class lists.
+            //  Example:
+            //      {
+            //          success: ['alert', 'alert-success'],
+            //          info: ['alert', 'alert-info'],
+            //          warning: ['alert', 'alert-warning'],
+            //          danger: ['alert', 'alert-danger']
+            //      };
+            // trait_name: string
+            //  Name of the trait to check the value of.
+            // previous_trait_value: optional string, default ''
+            //  Last trait value
+            // $el: optional jQuery element handle, defaults to this.$el
+            //  Element that the classes are applied to.
+            var key = previous_trait_value;
+            if (key === undefined) {
+                key = this.model.previous(trait_name);
+            }
+            var old_classes = class_map[key] ? class_map[key] : [];
+            key = this.model.get(trait_name);
+            var new_classes = class_map[key] ? class_map[key] : [];
+
+            this.update_classes(old_classes, new_classes, $el || this.$el);
+        },
+        
         _get_selector_element: function (selector) {
             // Get the elements via the css selector.
-
-            // If the selector is blank, apply the style to the $el_to_style 
-            // element.  If the $el_to_style element is not defined, use apply 
-            // the style to the view's element.
             var elements;
             if (!selector) {
-                if (this.$el_to_style === undefined) {
-                    elements = this.$el;
-                } else {
-                    elements = this.$el_to_style;
-                }
+                elements = this.$el;
             } else {
-                elements = this.$el.find(selector);
+                elements = this.$el.find(selector).addBack(selector);
             }
             return elements;
         },
     });
 
+    
     var widget = {
         'WidgetModel': WidgetModel,
         'WidgetView': WidgetView,

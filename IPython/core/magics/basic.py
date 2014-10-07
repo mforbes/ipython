@@ -362,9 +362,6 @@ Currently the magic system has the following functions:""",
 Proper color support under MS Windows requires the pyreadline library.
 You can find it at:
 http://ipython.org/pyreadline.html
-Gary's readline needs the ctypes module, from:
-http://starship.python.net/crew/theller/ctypes
-(Note that ctypes is already part of Python versions 2.5 and newer).
 
 Defaulting color scheme to 'NoColor'"""
             new_scheme = 'NoColor'
@@ -525,6 +522,7 @@ Defaulting color scheme to 'NoColor'"""
 
             %gui wx      # enable wxPython event loop integration
             %gui qt4|qt  # enable PyQt4 event loop integration
+            %gui qt5     # enable PyQt5 event loop integration
             %gui gtk     # enable PyGTK event loop integration
             %gui gtk3    # enable Gtk3 event loop integration
             %gui tk      # enable Tk event loop integration

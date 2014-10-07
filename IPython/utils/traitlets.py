@@ -54,7 +54,8 @@ except:
 
 from .importstring import import_item
 from IPython.utils import py3compat
-from IPython.utils.py3compat import iteritems
+from IPython.utils import eventful
+from IPython.utils.py3compat import iteritems, string_types
 from IPython.testing.skipdoctest import skip_doctest
 
 SequenceTypes = (list, tuple, set, frozenset)
@@ -132,13 +133,13 @@ def parse_notifier_name(name):
     >>> parse_notifier_name(None)
     ['anytrait']
     """
-    if isinstance(name, str):
+    if isinstance(name, string_types):
         return [name]
     elif name is None:
         return ['anytrait']
     elif isinstance(name, (list, tuple)):
         for n in name:
-            assert isinstance(n, str), "names must be strings"
+            assert isinstance(n, string_types), "names must be strings"
         return name
 
 
@@ -225,6 +226,61 @@ class link(object):
         for key, callback in self.objects.items():
             (obj,attr) = key
             obj.on_trait_change(callback, attr, remove=True)
+
+@skip_doctest
+class directional_link(object):
+    """Link the trait of a source object with traits of target objects.
+
+    Parameters
+    ----------
+    source : pair of object, name
+    targets : pairs of objects/attributes
+
+    Examples
+    --------
+
+    >>> c = directional_link((src, 'value'), (tgt1, 'value'), (tgt2, 'value'))
+    >>> src.value = 5  # updates target objects
+    >>> tgt1.value = 6 # does not update other objects
+    """
+    updating = False
+
+    def __init__(self, source, *targets):
+        self.source = source
+        self.targets = targets
+
+        # Update current value
+        src_attr_value = getattr(source[0], source[1])
+        for obj, attr in targets:
+            if getattr(obj, attr) != src_attr_value:
+                setattr(obj, attr, src_attr_value)
+
+        # Wire
+        self.source[0].on_trait_change(self._update, self.source[1])
+
+    @contextlib.contextmanager
+    def _busy_updating(self):
+        self.updating = True
+        try:
+            yield
+        finally:
+            self.updating = False
+
+    def _update(self, name, old, new):
+        if self.updating:
+            return
+        with self._busy_updating():
+            for obj, attr in self.targets:
+                setattr(obj, attr, new)
+
+    def unlink(self):
+        self.source[0].on_trait_change(self._update, self.source[1], remove=True)
+        self.source = None
+        self.targets = []
+
+def dlink(source, *targets):
+    """Shorter helper function returning a directional_link object"""
+    return directional_link(source, *targets)
 
 #-----------------------------------------------------------------------------
 # Base TraitType for all traits
@@ -402,8 +458,8 @@ class TraitType(object):
                 % (self.name, self.info(), repr_type(value))
         raise TraitError(e)
 
-    def get_metadata(self, key):
-        return getattr(self, '_metadata', {}).get(key, None)
+    def get_metadata(self, key, default=None):
+        return getattr(self, '_metadata', {}).get(key, default)
 
     def set_metadata(self, key, value):
         getattr(self, '_metadata', {})[key] = value
@@ -672,7 +728,7 @@ class HasTraits(py3compat.with_metaclass(MetaHasTraits, object)):
 
         return result
 
-    def trait_metadata(self, traitname, key):
+    def trait_metadata(self, traitname, key, default=None):
         """Get metadata values for trait by key."""
         try:
             trait = getattr(self.__class__, traitname)
@@ -680,7 +736,7 @@ class HasTraits(py3compat.with_metaclass(MetaHasTraits, object)):
             raise TraitError("Class %s does not have a trait named %s" %
                                 (self.__class__.__name__, traitname))
         else:
-            return trait.get_metadata(key)
+            return trait.get_metadata(key, default)
 
 #-----------------------------------------------------------------------------
 # Actual TraitTypes implementations/subclasses
@@ -1137,7 +1193,7 @@ class ObjectName(TraitType):
     def validate(self, obj, value):
         value = self.coerce_str(obj, value)
 
-        if isinstance(value, str) and py3compat.isidentifier(value):
+        if isinstance(value, string_types) and py3compat.isidentifier(value):
             return value
         self.error(obj, value)
 
@@ -1146,7 +1202,7 @@ class DottedObjectName(ObjectName):
     def validate(self, obj, value):
         value = self.coerce_str(obj, value)
 
-        if isinstance(value, str) and py3compat.isidentifier(value, dotted=True):
+        if isinstance(value, string_types) and py3compat.isidentifier(value, dotted=True):
             return value
         self.error(obj, value)
 
@@ -1489,6 +1545,49 @@ class Dict(Instance):
 
         super(Dict,self).__init__(klass=dict, args=args,
                                   allow_none=allow_none, **metadata)
+
+
+class EventfulDict(Instance):
+    """An instance of an EventfulDict."""
+
+    def __init__(self, default_value=None, allow_none=True, **metadata):
+        """Create a EventfulDict trait type from a dict.
+
+        The default value is created by doing 
+        ``eventful.EvenfulDict(default_value)``, which creates a copy of the 
+        ``default_value``.
+        """
+        if default_value is None:
+            args = ((),)
+        elif isinstance(default_value, dict):
+            args = (default_value,)
+        elif isinstance(default_value, SequenceTypes):
+            args = (default_value,)
+        else:
+            raise TypeError('default value of EventfulDict was %s' % default_value)
+
+        super(EventfulDict, self).__init__(klass=eventful.EventfulDict, args=args,
+                                  allow_none=allow_none, **metadata)
+
+
+class EventfulList(Instance):
+    """An instance of an EventfulList."""
+
+    def __init__(self, default_value=None, allow_none=True, **metadata):
+        """Create a EventfulList trait type from a dict.
+
+        The default value is created by doing 
+        ``eventful.EvenfulList(default_value)``, which creates a copy of the 
+        ``default_value``.
+        """
+        if default_value is None:
+            args = ((),)
+        else:
+            args = (default_value,)
+
+        super(EventfulList, self).__init__(klass=eventful.EventfulList, args=args,
+                                  allow_none=allow_none, **metadata)
+
 
 class TCPAddress(TraitType):
     """A trait for an (ip, port) tuple.
